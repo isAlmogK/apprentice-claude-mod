@@ -90,3 +90,48 @@ test('a remap keeps learned progress and takes the new paths and lines', async (
   await until(w, async () => w.store.has(`repo:${await repoId()}:meta`))
   expect(await areaIn(w, 'src-billing')).toMatchObject({ score: 0.3, level: 'junior', streak: 2, editsSinceLooked: 4, lines: 100, paths: ['src/billing/'] })
 })
+
+async function paneHasText($: any, text: string): Promise<boolean> {
+  const ui = await $.ui.mount(paneSite('desktop'))
+  const found = await ui.find({ type: 'Text', text })
+  await ui.unmount()
+  return found !== undefined
+}
+
+// What another session in the same repo would do: write the stored copy behind this session's back.
+async function otherSessionSaves(w: any, id: string, change: Record<string, unknown>) {
+  w.store.set(`repo:${await repoId()}:area:${id}`, { ...(await areaIn(w, id)), ...change })
+}
+
+test('a remap and a merge keep progress another session saved', async ($, on) => {
+  const w = stubWorld(on)
+  await mapFixture($, w)
+  await otherSessionSaves(w, 'src-billing', { score: 0.42, level: 'mid', streak: 2, editsSinceLooked: 3 })
+  await $.command.run({ command: 'apprentice', args: 'remap' })
+  await until(w, () => w.gitCalls.filter(c => c.args.startsWith('ls-tree')).length === 2)
+  for (let i = 0; i < 30; i++) await w.clock.settle()
+  expect(await areaIn(w, 'src-billing')).toMatchObject({ score: 0.42, level: 'mid', streak: 2, editsSinceLooked: 3 })
+  await otherSessionSaves(w, 'src-auth', { editsSinceLooked: 5 })
+  const ui = await $.ui.mount(paneSite('desktop'))
+  await ui.press({ key: 'area-src-auth' })
+  await ui.select({ key: 'merge', value: 'src-billing' })
+  expect(await areaIn(w, 'src-billing')).toMatchObject({ score: 0.21, editsSinceLooked: 8, lines: 200 })
+})
+
+test('an edit dims the stored copy and the map shows what was saved', async ($, on) => {
+  const w = stubWorld(on)
+  await mapFixture($, w)
+  await otherSessionSaves(w, 'src-auth', { score: 0.5, level: 'mid' })
+  await $.turn.start({ turnId: 't1' })
+  await $.tool.call({ tool: 'Edit', file_path: `${ROOT}/src/auth/login.ts`, old_string: 'a', new_string: 'a\nb' })
+  expect((await areaIn(w, 'src-auth')).score).toBe(0.48)
+  expect(await paneHasText($, 'You know 71% of the code as it is today')).toBe(true)
+})
+
+test('/apprentice reloads the map from the store', async ($, on) => {
+  const w = stubWorld(on)
+  await mapFixture($, w)
+  await otherSessionSaves(w, 'src-auth', { score: 0.5, level: 'mid' })
+  await $.command.run({ command: 'apprentice', args: '' })
+  expect(await paneHasText($, 'You know 72% of the code as it is today')).toBe(true)
+})

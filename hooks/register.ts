@@ -68,11 +68,20 @@ async function saveAllAreas($: any, r: Repo, list: Area[]): Promise<void> {
   await $.store.set(`repo:${r.id}:meta`, { ...(meta ?? {}), areaIds: list.map(a => a.id) })
 }
 
-// Read the stored copy, apply the same pure change, write it back: safe when two sessions share a repo.
-async function updateArea($: any, r: Repo, id: string, change: (a: Area) => Area): Promise<void> {
+// Read the stored copy, apply the pure change, write it back, and return what was written: the store
+// is the source of truth, so two sessions in one repo don't overwrite each other.
+async function updateArea($: any, r: Repo, id: string, change: (a: Area) => Area): Promise<Area | undefined> {
   const key = `repo:${r.id}:area:${id}`
   const stored: Area | undefined = await $.store.get(key)
-  if (stored) await $.store.set(key, change(stored))
+  if (!stored) return undefined
+  const written = change(stored)
+  await $.store.set(key, written)
+  return written
+}
+
+// Put a value read from or written to the store into the in-memory list.
+function putArea(saved: Area | undefined): void {
+  if (saved) areas = areas.map(a => (a.id === saved.id ? saved : a))
 }
 
 async function nameAreas($: any, drafts: AreaDraft[]): Promise<Record<string, string>> {
@@ -99,8 +108,10 @@ async function mapRepo($: any): Promise<void> {
     const drafts = groupAreas(files, commits)
     step = 'naming areas'
     const names = await nameAreas($, drafts)
-    const kept = new Map(areas.map(a => [a.id, a.name]))
-    const previous = areas
+    // Start from the stored areas, which hold what other sessions in this repo learned.
+    const stored = await loadAreas($, r)
+    const previous = stored.length > 0 ? stored : areas
+    const kept = new Map(previous.map(a => [a.id, a.name]))
     const known = new Set(previous.map(a => a.id))
     areas = carryProgress(previous, drafts.map(d => draftToArea({ ...d, name: kept.get(d.id) ?? names[d.id] ?? d.name }, 0)))
     const fresh = drafts.filter(d => !known.has(d.id))
@@ -127,6 +138,9 @@ async function mapRepo($: any): Promise<void> {
       $.ui.invalidate('ui.render')
     }
     step = 'saving'
+    // Seeding can take a while: take progress saved meanwhile for the surviving ids before writing.
+    const latest = await loadAreas($, r)
+    if (latest.length > 0) areas = carryProgress(latest, areas)
     await saveAllAreas($, r, areas)
     status = 'ready'
     progress = ''
@@ -155,14 +169,18 @@ async function renameAndSave($: any, id: string, name: string): Promise<void> {
   if (!repo || name.trim() === '') return
   areas = renameArea(areas, id, name)
   $.ui.invalidate('ui.render')
-  await updateArea($, repo, id, a => ({ ...a, name: name.trim() }))
+  putArea(await updateArea($, repo, id, a => ({ ...a, name: name.trim() })))
+  $.ui.invalidate('ui.render')
 }
 
 async function mergeAndSave($: any, fromId: string, intoId: string): Promise<void> {
   if (!repo) return
-  areas = mergeAreas(areas, fromId, intoId)
-  const merged = areas.find(a => a.id === intoId)
-  if (!merged) return
+  // Merge the stored copies, which hold what other sessions learned; memory is the fallback.
+  const from: Area | undefined = (await $.store.get(areaKey(fromId))) ?? areas.find(a => a.id === fromId)
+  const into: Area | undefined = (await $.store.get(areaKey(intoId))) ?? areas.find(a => a.id === intoId)
+  if (!from || !into || fromId === intoId) return
+  const merged = mergeAreas([into, from], fromId, intoId)[0]
+  areas = areas.filter(a => a.id !== fromId).map(a => (a.id === intoId ? merged : a))
   await $.store.set(areaKey(intoId), merged)
   await $.store.delete(areaKey(fromId))
   const meta: Meta | undefined = await $.store.get(metaKey())
@@ -232,9 +250,9 @@ async function answerCard($: any, c: Card, isRight: boolean, flagged: boolean): 
   if (!repo || card !== c || revealed) return
   revealed = { isRight }
   await ensureWeekStart($, await $.clock.now())
-  areas = areas.map(a => (a.id === c.areaId ? applyAnswer(a, c.dimmedBy, isRight) : a))
   $.ui.invalidate('ui.render')
-  await updateArea($, repo, c.areaId, a => applyAnswer(a, c.dimmedBy, isRight))
+  putArea(await updateArea($, repo, c.areaId, a => applyAnswer(a, c.dimmedBy, isRight)))
+  $.ui.invalidate('ui.render')
   await logAnswer($, c, { skipped: false, isRight, flagged })
   if (flagged && c.kind === 'flaw') submitFlag($, flagPromptText(c))
   $.clock.after(REVEAL_MS, () => {
@@ -370,6 +388,11 @@ export function register(on: any) {
     }
     if (sub !== '' && sub !== 'remap') return { text: USAGE }
     if (repo && (sub === 'remap' || status === 'idle' || status === 'failed')) startMapping($)
+    else if (repo && status === 'ready') {
+      // Pick up what other sessions in this repo saved since this one loaded.
+      const loaded = await loadAreas($, repo)
+      if (loaded.length > 0) areas = loaded
+    }
     await $.ui.open({ id: MAP_PANE, title: 'Apprentice', focus: true, closeOnEscape: true })
     return {}
   })
@@ -422,10 +445,14 @@ export function register(on: any) {
       if (rel === null) return result
       const area = areaForPath(areas, rel)
       if (!area) return result
-      const dimmedBy = dimmedByFor(area, changedLinesOf(e.tool, e))
-      areas = areas.map(a => (a.id === area.id ? applyDim(a, dimmedBy) : a))
+      const changed = changedLinesOf(e.tool, e)
+      // Dim the stored copy by what its own score allows, and keep that amount for the card.
+      let dimmedBy = 0
+      putArea(await updateArea($, repo, area.id, a => {
+        dimmedBy = dimmedByFor(a, changed)
+        return applyDim(a, dimmedBy)
+      }))
       $.ui.invalidate('ui.render')
-      await updateArea($, repo, area.id, a => applyDim(a, dimmedBy))
       const now = await $.clock.now()
       const wantsCard = !firstEditDone && now >= quietUntil
         && cardsWithinHour(cardTimes, now).length < CARDS_PER_HOUR && !isSecretPath(rel)
