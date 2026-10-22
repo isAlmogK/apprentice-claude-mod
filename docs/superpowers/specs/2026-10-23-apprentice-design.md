@@ -1,6 +1,6 @@
 # Apprentice: Design
 
-**Status:** Draft (2026-10-23)
+**Status:** Implemented (2026-10-23), manual check pending
 
 **Repos:** apprentice (this spec: the whole feature). No other repo changes.
 
@@ -347,6 +347,23 @@ Map (Desktop `Svg`, terminal `Raster`), adaptive cards (question and spot-the-fl
 - [ ] Is a line estimate from file size good enough for dimming, or should mapping count lines exactly for small files?
 
 Resolved while planning (2026-10-23): `tool.call` fires for subagents' tool calls too ([events docs](https://code.claude.com/docs/en/plugins/mods/events.md#guard-or-change-a-tool-call)), and Wrapped copies text, not an image.
+
+## As built
+
+Where the code differs from this spec, as of 2026-10-23. The current truth is in [docs/apprentice.md](../../apprentice.md).
+
+1. `src/cards/policy.ts` exists (`CARDS_PER_HOUR`, `HOUR_MS`, `cardsWithinHour`, the hourly cap). It isn't in the file tree in section 4.
+2. `/apprentice remap` keeps learned progress. Areas whose id survives keep their score, level, streak and `editsSinceLooked` and take only the new paths and lines; only new ids are seeded from blame (`carryProgress` in `src/core/areas.ts`). The spec said a remap refreshes the seed for every area. The user chose this on 2026-10-23. A remap also keeps existing area names, so renames survive it.
+3. The edit hook wraps its work after the edit in try/catch and has a `.catch` handler, so a failure in Apprentice never affects Claude's edit.
+4. `$.ui.copy` is called as `$.ui.copy({ text })`, not with the bare string.
+5. The flag's fallback text, used when Haiku saw no flaw, is "something in this change looks wrong to them". Section 6 had the placeholder "something looks wrong here"; the user confirmed the code's wording.
+6. The co-change merge never merges the "Other" area (skipped by id), which the spec didn't say.
+7. Relative imports end in `.ts`. Tests run only as a whole suite: `claude plugin test` takes a plugin folder, not a file.
+8. `$.ui.copy`, `timeoutMs` on `$.model.complete` and `$.store.keys()` were confirmed by the test kit, not by locally generated type declarations.
+9. Edits are ignored (no dimming, no card) until the map is ready, which the spec didn't state.
+10. The weekly toast counts every entry in the week's answer log, skipped cards included. The spec said "5 answers".
+11. The terminal map legend reads "● you know it · ○ Claude changed it since" instead of the Desktop wording.
+12. `/apprentice quiet` also clears a card that is on screen.
 
 ## Sources
 
