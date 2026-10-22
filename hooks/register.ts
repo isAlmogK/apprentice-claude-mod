@@ -1,13 +1,14 @@
 import { areaForPath, carryProgress, draftToArea, groupAreas, mergeAreas, renameArea, type AreaDraft } from '../src/core/areas.ts'
 import { BLAME_SAMPLE, parseBlame, parseLog, parseLsTree, relativeTo, repoIdFrom, repoNameOf, sampleFiles } from '../src/core/git.ts'
-import type { Area, Card } from '../src/core/types.ts'
+import type { Answer, Area, Card } from '../src/core/types.ts'
 import { applyAnswer, applyDim, changedLinesOf, dimmedByFor, initialLevel, isFlawAnswerRight, seedScore } from '../src/core/understanding.ts'
-import { isoWeek } from '../src/core/wrapped.ts'
+import { buildWrapped, isoWeek, weekIndex, wrappedText } from '../src/core/wrapped.ts'
 import { isSecretPath } from '../src/cards/exclude.ts'
 import { CARDS_PER_HOUR, HOUR_MS, cardsWithinHour } from '../src/cards/policy.ts'
 import { parseAreaNames, parseCardReply } from '../src/cards/parse.ts'
-import { MAX_HUNK_LINES, buildCardRequest, buildNamingRequest, diffOf, editTextsOf, type EditText } from '../src/cards/prompt.ts'
+import { MAX_HUNK_LINES, buildCardRequest, flagPromptText, buildNamingRequest, diffOf, editTextsOf, type EditText } from '../src/cards/prompt.ts'
 import { renderCard } from '../src/views/card.ts'
+import { renderWrapped } from '../src/views/wrapped.ts'
 import { renderPane, type PaneModel, type PaneStatus } from '../src/views/pane.ts'
 
 export const MAP_PANE = 'apprentice'
@@ -220,10 +221,12 @@ async function logAnswer($: any, c: Card, outcome: { skipped: boolean; isRight: 
 async function answerCard($: any, c: Card, isRight: boolean, flagged: boolean): Promise<void> {
   if (!repo || card !== c || revealed) return
   revealed = { isRight }
+  await ensureWeekStart($, await $.clock.now())
   areas = areas.map(a => (a.id === c.areaId ? applyAnswer(a, c.dimmedBy, isRight) : a))
   $.ui.invalidate('ui.render')
   await updateArea($, repo, c.areaId, a => applyAnswer(a, c.dimmedBy, isRight))
   await logAnswer($, c, { skipped: false, isRight, flagged })
+  if (flagged && c.kind === 'flaw') submitFlag($, flagPromptText(c))
   $.clock.after(REVEAL_MS, () => {
     if (card === c) {
       card = null
@@ -238,6 +241,7 @@ async function skipCard($: any, c: Card): Promise<void> {
   card = null
   revealed = null
   $.ui.invalidate('ui.render')
+  await ensureWeekStart($, await $.clock.now())
   const key = `repo:${repo.id}:pending:${c.areaId}`
   const pending: Card[] = (await $.store.get(key)) ?? []
   const updated = [...pending, c].slice(-PENDING_MAX)
@@ -267,6 +271,59 @@ async function restorePending($: any, index: number): Promise<void> {
   $.ui.invalidate('ui.render')
 }
 
+const KEEP_WEEKS = 8
+const TOAST_MIN_ANSWERS = 5
+
+let pendingFlag: string | null = null
+
+async function submitFlag($: any, text: string): Promise<void> {
+  let reason = ''
+  try {
+    const result = await $.prompt.submit({ text })
+    reason = result?.drop ?? ''
+  } catch (error: any) {
+    reason = String(error?.message ?? error)
+  }
+  if (reason.includes('the session was stopped and nobody has sent input since') || reason.includes('was removed from the queue before it ran')) {
+    pendingFlag = text
+  }
+}
+
+async function pruneAnswers($: any, id: string, week: string): Promise<void> {
+  const prefix = `repo:${id}:answers:`
+  const keys: string[] = (await $.store.keys()) ?? []
+  for (const key of keys) {
+    if (!key.startsWith(prefix)) continue
+    if (weekIndex(week) - weekIndex(key.slice(prefix.length)) > KEEP_WEEKS) await $.store.delete(key)
+  }
+}
+
+async function ensureWeekStart($: any, now: number): Promise<void> {
+  if (!repo) return
+  const week = isoWeek(now)
+  const meta: Meta = (await $.store.get(metaKey())) ?? { areaIds: areas.map(a => a.id) }
+  if (meta.weekStart?.week === week) return
+  const scores = Object.fromEntries(areas.map(a => [a.id, a.score]))
+  await $.store.set(metaKey(), { ...meta, weekStart: { week, scores } })
+  await pruneAnswers($, repo.id, week)
+}
+
+async function checkWrappedToast($: any): Promise<void> {
+  if (!repo) return
+  const week = isoWeek(await $.clock.now())
+  const log: Answer[] = (await $.store.get(`repo:${repo.id}:answers:${week}`)) ?? []
+  if (log.length < TOAST_MIN_ANSWERS) return
+  const toastedKey = `repo:${repo.id}:toasted`
+  if ((await $.store.get(toastedKey)) === week) return
+  await $.store.set(toastedKey, week)
+  $.ui.toast('Codebase Wrapped is ready: run /apprentice wrapped')
+}
+
+async function copyWrapped($: any, text: string): Promise<void> {
+  await $.ui.copy({ text })
+  $.ui.toast('Copied')
+}
+
 export function register(on: any) {
   on('session.start', async ($: any, e: any, next: any) => {
     const found = await $.session.repo()
@@ -275,6 +332,7 @@ export function register(on: any) {
       areas = await loadAreas($, repo)
       status = areas.length > 0 ? 'ready' : 'idle'
     }
+    $.clock.every(HOUR_MS, () => checkWrappedToast($))
     await $.command.register({
       name: 'apprentice',
       description: 'Open your knowledge map of this repo',
@@ -291,6 +349,10 @@ export function register(on: any) {
       await quietCards($, minutes)
       return { text: `Cards are paused for ${minutes} minutes.` }
     }
+    if (sub === 'wrapped') {
+      await $.ui.open({ id: WRAPPED_PANE, title: 'Codebase Wrapped', focus: true, closeOnEscape: true })
+      return {}
+    }
     if (sub !== '' && sub !== 'remap') return { text: USAGE }
     if (repo && (sub === 'remap' || status === 'idle' || status === 'failed')) startMapping($)
     await $.ui.open({ id: MAP_PANE, title: 'Apprentice', focus: true, closeOnEscape: true })
@@ -298,6 +360,16 @@ export function register(on: any) {
   })
 
   on('ui.render', { component: 'Pane' }, async ($: any, e: any, next: any) => {
+    if (e.requestId === WRAPPED_PANE && repo) {
+      const E = $.ui.resolve(e)
+      const week = isoWeek(await $.clock.now())
+      const log: Answer[] = (await $.store.get(`repo:${repo.id}:answers:${week}`)) ?? []
+      const meta: Meta | undefined = await $.store.get(metaKey())
+      const start = meta?.weekStart?.week === week ? meta.weekStart.scores : {}
+      const summary = buildWrapped(log, areas, start)
+      const name = repo.name
+      return renderWrapped(E, summary, name, week, { onCopy: () => copyWrapped($, wrappedText(summary, name, week)) })
+    }
     if (e.requestId !== MAP_PANE) return next(e)
     const E = $.ui.resolve(e)
     return renderPane(E, paneModel(e), {
@@ -309,6 +381,16 @@ export function register(on: any) {
   })
 
   // --- more hooks ---
+
+  on('turn.complete', async ($: any, e: any, next: any) => {
+    if (pendingFlag !== null) {
+      const text = pendingFlag
+      pendingFlag = null
+      // Not awaited: the hook would stay open until the new turn starts
+      submitFlag($, text)
+    }
+    return next(e)
+  })
 
   on('turn.start', async ($: any, e: any, next: any) => {
     if (e.agentId === undefined) firstEditDone = false
