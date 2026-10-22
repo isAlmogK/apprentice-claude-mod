@@ -364,6 +364,8 @@ Where the code differs from this spec, as of 2026-10-23. The current truth is in
 10. The weekly toast counts every entry in the week's answer log, skipped cards included. The spec said "5 answers".
 11. The terminal map legend reads "● you know it · ○ Claude changed it since" instead of the Desktop wording.
 12. `/apprentice quiet` also clears a card that is on screen.
+13. A remap doesn't delete the stored keys of area ids that vanished (`saveAllAreas`); they stay orphaned and unread.
+14. The area-naming request leaves out secret paths (`isSecretPath`), as section 7 requires; the plan's first version didn't filter it.
 
 ## Sources
 

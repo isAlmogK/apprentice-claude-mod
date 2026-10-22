@@ -29,7 +29,7 @@ Any other argument replies `Usage: /apprentice [wrapped | quiet [minutes] | rema
 4. Groups under 2% of lines merge into one "Other" area (id `other`).
 5. Co-change merge: the pair whose commits overlap most (commits touching both divided by commits touching either) merges while that ratio is over 0.6, both groups have at least 3 commits, and more than 6 groups remain. The "Other" area is never merged this way.
 6. While more than 15 groups remain, the two smallest merge.
-7. Ids are slugs of the folder prefix, made unique with a numeric suffix. Names default to the prefix; one Haiku call (`$.model.complete`, `model: 'haiku'`) renames them all, and any area missing from a valid reply keeps its default name.
+7. Ids are slugs of the folder prefix, made unique with a numeric suffix. Names default to the prefix; one Haiku call (`$.model.complete`, `model: 'haiku'`) renames them all from folder paths and up to five file names each (secret paths left out), and any area missing from a valid reply keeps its default name.
 
 Co-change data comes from `git log --name-only --format=@@commit -n 500`.
 
@@ -92,6 +92,8 @@ All keys are in `$.store`, per repo. `repoId` is the first 16 hex characters of 
 | `repo:<repoId>:answers:<ISO week>` | The week's answer log; weeks more than 8 behind are deleted when a new week's start is first written |
 | `repo:<repoId>:pending:<areaId>` | Skipped cards for the area, at most 5 |
 | `repo:<repoId>:toasted` | The week of the last Wrapped toast |
+
+A remap doesn't delete the stored keys of area ids that no longer exist; they stay orphaned and are never read, because `meta.areaIds` no longer lists them.
 
 Module variables, lost on a reload: the card on screen, the quiet-until time, the cards-this-hour list, the first-edit flag and a flag waiting to be resubmitted. Each area write reads the stored copy, applies the same pure change and writes it back, so two sessions in one repo don't overwrite each other.
 

@@ -64,7 +64,7 @@ Everything stays on your machine except what Apprentice asks Haiku, through Clau
 **Goes to Haiku:**
 
 - For each card: one edit's diff (at most 120 lines), the file's path and the area's name.
-- Once per map: the area folder paths and up to five file names per area, to name the areas.
+- Once per map: the area folder paths and up to five file names per area, to name the areas, with secret-looking paths left out.
 
 **Never goes to Haiku:**
 

@@ -43,6 +43,12 @@ test('buildNamingRequest lists each area', async () => {
   expect(req.prompt).toBe('src-billing: folders src/billing/; files src/billing/invoice.ts')
 })
 
+test('buildNamingRequest leaves secret paths out', async () => {
+  const files = [{ path: 'src/.env', lines: 50 }, { path: 'src/secrets.ts', lines: 40 }, { path: 'src/app.ts', lines: 5 }]
+  const req = buildNamingRequest([{ id: 'src', name: 'src', paths: ['src/'], lines: 95, files }])
+  expect(req.prompt).toBe('src: folders src/; files src/app.ts')
+})
+
 test('flagPromptText quotes the concern', async () => {
   const card = { file: 'src/auth/session.ts', haikuSeesFlaw: true, summary: 'Expired sessions are refreshed.' } as FlawCard
   expect(flagPromptText(card)).toBe('Apprentice flag on src/auth/session.ts: the user reviewed this change and is concerned: "Expired sessions are refreshed.". Check whether it was intended, and fix it if not.')

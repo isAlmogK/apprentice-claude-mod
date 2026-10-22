@@ -1,5 +1,6 @@
 import type { AreaDraft } from '../core/areas.ts'
 import { sampleFiles } from '../core/git.ts'
+import { isSecretPath } from './exclude.ts'
 import type { FlawCard, Level } from '../core/types.ts'
 
 export const MAX_DIFF_LINES = 120
@@ -59,8 +60,8 @@ export function buildCardRequest(areaName: string, level: Level, edit: EditText)
 
 export function buildNamingRequest(drafts: AreaDraft[]): { system: string; prompt: string } {
   const lines = drafts.map(d => {
-    const folders = d.paths.map(p => p || '(repo root)').join(', ')
-    const files = sampleFiles(d.files, 5).map(f => f.path).join(', ')
+    const folders = d.paths.filter(p => !isSecretPath(p)).map(p => p || '(repo root)').join(', ')
+    const files = sampleFiles(d.files.filter(f => !isSecretPath(f.path)), 5).map(f => f.path).join(', ')
     return `${d.id}: folders ${folders}; files ${files}`
   })
   return { system: NAMING_SYSTEM, prompt: lines.join('\n') }
