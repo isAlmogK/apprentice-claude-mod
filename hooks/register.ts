@@ -1,5 +1,5 @@
 import { areaForPath, carryProgress, draftToArea, groupAreas, mergeAreas, renameArea, type AreaDraft } from '../src/core/areas.ts'
-import { BLAME_SAMPLE, parseBlame, parseLog, parseLsTree, relativeTo, repoIdFrom, repoNameOf, sampleFiles } from '../src/core/git.ts'
+import { BLAME_SAMPLE, parseBlame, parseLog, parseLsTree, parseWorktreeList, relativeTo, repoIdFrom, repoNameOf, rootFor, sampleFiles } from '../src/core/git.ts'
 import type { Answer, Area, Card } from '../src/core/types.ts'
 import { applyAnswer, applyDim, changedLinesOf, dimmedByFor, initialLevel, isFlawAnswerRight, seedScore } from '../src/core/understanding.ts'
 import { buildWrapped, isoWeek, weekIndex, wrappedText } from '../src/core/wrapped.ts'
@@ -16,6 +16,7 @@ export const WRAPPED_PANE = 'apprentice-wrapped'
 const GIT_TIMEOUT_MS = 600_000
 const USAGE = 'Usage: /apprentice [wrapped | quiet [minutes] | remap]'
 
+// root is the session's working tree (a linked worktree's own root, not the main checkout's): mapping and blame run there.
 type Repo = { id: string; root: string; name: string }
 type Meta = { areaIds: string[]; weekStart?: { week: string; scores: Record<string, number> } }
 
@@ -39,6 +40,15 @@ function metaKey(): string {
 
 async function runGit($: any, root: string, args: string[]): Promise<{ exitCode: number; stdout: string }> {
   return $.process.run(['git', ...args], { cwd: root, timeoutMs: GIT_TIMEOUT_MS })
+}
+
+// The working tree an edited file lives in, found among the repo's worktrees (longest root wins).
+// Listed on every edit, so a worktree made during the session is found too.
+async function fileRootOf($: any, r: Repo, path: string): Promise<string> {
+  if (!path.startsWith('/')) return r.root
+  const listed = await runGit($, r.root, ['worktree', 'list', '--porcelain'])
+  const roots = listed.exitCode === 0 ? parseWorktreeList(listed.stdout) : []
+  return rootFor([r.root, ...roots], path) ?? r.root
 }
 
 async function loadAreas($: any, r: Repo): Promise<Area[]> {
@@ -174,7 +184,7 @@ function paneModel(e: any): PaneModel {
 const REVEAL_MS = 8000
 const PENDING_MAX = 5
 
-type CardContext = { areaId: string; areaName: string; level: Area['level']; edit: EditText; dimmedBy: number; editId: string }
+type CardContext = { root: string; areaId: string; areaName: string; level: Area['level']; edit: EditText; dimmedBy: number; editId: string }
 
 let card: Card | null = null
 let revealed: { isRight: boolean } | null = null
@@ -184,7 +194,7 @@ let firstEditDone = false
 
 async function makeCard($: any, ctx: CardContext): Promise<void> {
   if (!repo) return
-  const ignored = await runGit($, repo.root, ['check-ignore', '-q', ctx.edit.file])
+  const ignored = await runGit($, ctx.root, ['check-ignore', '-q', ctx.edit.file])
   if (ignored.exitCode === 0) return
   const request = buildCardRequest(ctx.areaName, ctx.level, ctx.edit)
   let reply: any
@@ -328,7 +338,12 @@ export function register(on: any) {
   on('session.start', async ($: any, e: any, next: any) => {
     const found = await $.session.repo()
     if (found) {
-      repo = { id: await repoIdFrom(found.remote ?? found.root), root: found.root, name: repoNameOf(found.root) }
+      // repo() names the main checkout for every worktree: it keys progress, so all worktrees share it.
+      // Path work uses the session's own working tree.
+      const cwd = String((await $.session.cwd()) ?? found.root)
+      const top = await runGit($, cwd, ['rev-parse', '--show-toplevel'])
+      const root = top.exitCode === 0 && top.stdout.trim() !== '' ? top.stdout.trim() : found.root
+      repo = { id: await repoIdFrom(found.remote ?? found.root), root, name: repoNameOf(found.root) }
       areas = await loadAreas($, repo)
       status = areas.length > 0 ? 'ready' : 'idle'
     }
@@ -401,7 +416,9 @@ export function register(on: any) {
     const result = await next(e)
     try {
       if (result?.deny || result?.isError || status !== 'ready' || !repo) return result
-      const rel = relativeTo(repo.root, String(e.file_path ?? ''))
+      const path = String(e.file_path ?? '')
+      const root = await fileRootOf($, repo, path)
+      const rel = relativeTo(root, path)
       if (rel === null) return result
       const area = areaForPath(areas, rel)
       if (!area) return result
@@ -415,7 +432,7 @@ export function register(on: any) {
       firstEditDone = true
       if (wantsCard) {
         const ctx: CardContext = {
-          areaId: area.id, areaName: area.name, level: area.level,
+          root, areaId: area.id, areaName: area.name, level: area.level,
           edit: { file: rel, ...editTextsOf(e.tool, e) }, dimmedBy, editId: `${now}`,
         }
         $.clock.after(0, () => makeCard($, ctx))

@@ -40,6 +40,7 @@ export const GIT: Record<string, { exitCode?: number; stdout: string }> = {
     ].join('\n'),
   },
   'log --name-only': { stdout: '@@commit\n\nsrc/billing/invoice.ts\n' },
+  'worktree list --porcelain': { stdout: `worktree ${ROOT}\nHEAD 1111111111111111111111111111111111111111\nbranch refs/heads/main\n` },
   'config user.email': { stdout: 'me@example.com\n' },
   'blame --line-porcelain -- src/billing/invoice.ts': { stdout: blame(['me@example.com', 'me@example.com', 'me@example.com', 'other@example.com']) },
   'blame --line-porcelain -- src/auth/login.ts': { stdout: blame(['other@example.com']) },
@@ -68,13 +69,17 @@ export type World = {
   toasts: string[]
   copied: string[]
   modelCalls: any[]
+  gitCalls: { args: string; cwd: string }[]
+  commands: string[]
   clock: any
 }
 
 export type WorldOptions = {
   git?: Record<string, { exitCode?: number; stdout: string }>
-  model?: (e: any) => string | null
-  repo?: boolean
+  model?: (e: any) => string | null | Promise<string | null>
+  // The session's working directory; `git rev-parse --show-toplevel` answers it unless `git` overrides that.
+  cwd?: string
+  repo?: boolean | 'throws'
   store?: Record<string, unknown>
   storeFails?: () => boolean
 }
@@ -82,25 +87,34 @@ export type WorldOptions = {
 export function stubWorld(on: any, opts: WorldOptions = {}): World {
   const w: World = {
     store: new Map(Object.entries(opts.store ?? {})), submitted: [], submitReplies: [],
-    toasts: [], copied: [], modelCalls: [], clock: null,
+    toasts: [], copied: [], modelCalls: [], gitCalls: [], commands: [], clock: null,
   }
-  const git = { ...GIT, ...(opts.git ?? {}) }
+  const cwd = opts.cwd ?? ROOT
+  const git = { ...GIT, 'rev-parse --show-toplevel': { stdout: `${cwd}\n` }, ...(opts.git ?? {}) }
   w.clock = mock.clock(on, { now: NOW })
   on('session.start', () => ({ cwd: ROOT }))
-  on('command.register', () => ({ value: undefined }))
-  on('session.repo', () => ({ value: opts.repo === false ? null : { root: ROOT, remote: REMOTE, internal: false } }))
+  on('command.register', ($: any, e: any) => { w.commands.push(e.name); return { value: undefined } })
+  on('session.cwd', () => ({ value: cwd }))
+  on('session.repo', () => {
+    if (opts.repo === 'throws') throw new Error('git is broken')
+    return { value: opts.repo === false ? null : { root: ROOT, remote: REMOTE, internal: false } }
+  })
   on('store.get', ($: any, e: any) => ({ value: w.store.get(e.key) }))
   on('store.set', ($: any, e: any) => { if (opts.storeFails?.()) throw new Error('disk full'); w.store.set(e.key, e.value); return { value: undefined } })
   on('store.delete', ($: any, e: any) => { w.store.delete(e.key); return { value: undefined } })
   on('store.keys', () => ({ value: [...w.store.keys()] }))
   on('process.run', ($: any, e: any) => {
-    const args = e.argv.slice(1).join(' ')
+    // Skip git's leading `-c name=value` options, so stubs match on the command itself
+    const argv: string[] = e.argv.slice(1)
+    while (argv[0] === '-c') argv.splice(0, 2)
+    const args = argv.join(' ')
+    w.gitCalls.push({ args, cwd: e.init?.cwd ?? '' })
     const hit = Object.entries(git).find(([k]) => args.startsWith(k))
     return { value: hit ? { exitCode: hit[1].exitCode ?? 0, stdout: hit[1].stdout, stderr: '' } : { exitCode: 1, stdout: '', stderr: 'no stub' } }
   })
-  on('model.complete', ($: any, e: any) => {
+  on('model.complete', async ($: any, e: any) => {
     w.modelCalls.push(e)
-    const text = (opts.model ?? defaultModel)(e)
+    const text = await (opts.model ?? defaultModel)(e)
     if (text === null) return { value: { isAnswered: false, reason: 'stubbed failure' } }
     return { value: { isAnswered: true, text, usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }
   })

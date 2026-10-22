@@ -58,3 +58,18 @@ export function repoNameOf(root: string): string {
 export function sampleFiles(files: FileInfo[], n: number): FileInfo[] {
   return [...files].sort((a, b) => b.lines - a.lines || a.path.localeCompare(b.path)).slice(0, n)
 }
+
+// The `worktree <path>` lines of `git worktree list --porcelain`: every working tree of the repo.
+export function parseWorktreeList(stdout: string): string[] {
+  return stdout.split('\n').filter(l => l.startsWith('worktree ')).map(l => l.slice('worktree '.length).trim()).filter(Boolean)
+}
+
+// The working tree an absolute path is in: the longest root it sits under, or null.
+export function rootFor(roots: string[], path: string): string | null {
+  if (!path.startsWith('/')) return null
+  let best: string | null = null
+  for (const root of roots) {
+    if (relativeTo(root, path) !== null && (best === null || root.length > best.length)) best = root
+  }
+  return best
+}

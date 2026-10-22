@@ -165,3 +165,33 @@ test('an edit still succeeds when saving the dimming fails', async ($, on) => {
   const result = await $.tool.call({ tool: 'Edit', file_path: AUTH, old_string: 'a', new_string: 'a\nlog(invoice)' })
   expect(result).toMatchObject({ result: 'ok' })
 })
+
+const FEATURE = '/work/dogbase-feature'
+const NESTED = `${ROOT}/.claude/worktrees/fix`
+const WORKTREES = {
+  'worktree list --porcelain': {
+    stdout: [`worktree ${ROOT}`, 'HEAD 1111111111111111111111111111111111111111', 'branch refs/heads/main', '',
+      `worktree ${FEATURE}`, 'HEAD 2222222222222222222222222222222222222222', 'branch refs/heads/feature', '',
+      `worktree ${NESTED}`, 'HEAD 3333333333333333333333333333333333333333', 'detached', ''].join('\n'),
+  },
+}
+
+test('an edit in another worktree of the repo dims the right area', async ($, on) => {
+  const w = stubWorld(on, { git: WORKTREES })
+  await mapFixture($, w)
+  await edit($, `${FEATURE}/src/auth/login.ts`, 't1')
+  expect((await areaIn(w, 'src-auth')).editsSinceLooked).toBe(1)
+  await until(w, () => w.gitCalls.some(c => c.args.startsWith('check-ignore')))
+  expect(w.gitCalls.find(c => c.args.startsWith('check-ignore'))).toEqual({ args: 'check-ignore -q src/auth/login.ts', cwd: FEATURE })
+  await edit($, `${NESTED}/src/billing/invoice.ts`, 't2')
+  expect((await areaIn(w, 'src-billing')).editsSinceLooked).toBe(1)
+})
+
+test('a session started in a worktree maps that worktree and keeps the repo id', async ($, on) => {
+  const w = stubWorld(on, { git: WORKTREES, cwd: FEATURE })
+  await mapFixture($, w)
+  expect(w.gitCalls.find(c => c.args.startsWith('ls-tree'))?.cwd).toBe(FEATURE)
+  expect(w.gitCalls.find(c => c.args.startsWith('blame'))?.cwd).toBe(FEATURE)
+  await edit($, `${FEATURE}/src/auth/login.ts`, 't1')
+  expect((await areaIn(w, 'src-auth')).editsSinceLooked).toBe(1)
+})
