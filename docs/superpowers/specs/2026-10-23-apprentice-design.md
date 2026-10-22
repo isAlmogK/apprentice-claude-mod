@@ -36,22 +36,24 @@ Of the 278 mods listed on claude-mods.com, none teaches the user their own codeb
 /plugin install apprentice@apprentice
 ```
 
-Requires Claude Code v2.1.299 or later (for `Text` `weight` and the step names in `Box` spacing).
+Requires Claude Code v2.1.296 or later, the version it is built and tested on. Apprentice avoids element props that need v2.1.299 (`Text` `weight`, named `Box` spacing steps).
 
 ### First run in a repo
 
 1. The user runs `/apprentice`. The map pane opens and shows "Mapping your repo…".
-2. In the background, Apprentice groups the repo's folders into 6 to 15 areas, asks Haiku to name them, and seeds each area's score from `git blame` authorship under the user's git email.
+2. In the background, Apprentice groups the repo's folders into at most 15 areas, asks Haiku to name them, and seeds each area's score from `git blame` authorship under the user's git email.
 3. The map appears. A senior opening their own repo sees mostly bright areas; a new hire sees mostly dark ones.
 4. The user can rename or merge areas from the pane. Their changes are kept.
 
+Outside a git repo, the pane says "Apprentice needs a git repo" and the mod does nothing else.
+
 ### Every editing turn
 
-1. Claude makes its first real edit of the turn (`Edit`, `Write` or `MultiEdit`).
+1. Claude makes its first successful edit of the turn (`Edit`, `Write` or `MultiEdit`), in the main conversation or a subagent.
 2. Apprentice dims the edited area and, in the background, asks Haiku for a card about that edit at the user's level for that area.
 3. The card appears in the band above the prompt while Claude keeps working. The user answers with a click or by typing 1, 2 or 3 into the empty prompt.
 4. The answer reveals the explanation and relights the area. A wrong answer still shows the explanation.
-5. On a spot-the-flaw card, **Flag to Claude** queues a prompt describing the user's concern. It runs when Claude is idle.
+5. On a spot-the-flaw card, **Flag to Claude** queues a prompt describing the concern. It runs when Claude is idle.
 
 Later edits in the same turn dim their areas but make no new card.
 
@@ -62,9 +64,11 @@ Later edits in the same turn dim their areas but make no new card.
 
 ### Weekly
 
-Once a week a toast says Codebase Wrapped is ready. `/apprentice wrapped` opens it. It has a **Copy image** button and never contains code.
+Once a week, when the week has at least 5 answers, a toast says Codebase Wrapped is ready. `/apprentice wrapped` opens it. Its **Copy** button copies a text version for posting. It never contains code.
 
 ### Commands
+
+One registered command, `/apprentice`, with an optional argument:
 
 | Command | Does |
 | --- | --- |
@@ -82,184 +86,189 @@ Approved mockups (2026-10-23) show three surfaces. Numbers in them were placehol
 Two kinds, each one glance tall:
 
 - **Question card** (junior and mid levels): a header (`Apprentice · <area> · <level> card`), one question about the edit, three numbered answers, Skip and Quiet 1h.
-- **Spot-the-flaw card** (senior level): the same header, the hunk Claude just wrote in a `Code` element with `format: 'diff'`, and two buttons: **Looks fine** and **Flag to Claude**.
+- **Spot-the-flaw card** (senior level): the same header, the hunk Claude just wrote in a `Code` element with `format: 'diff'`, and two buttons: **Looks fine** (1) and **Flag to Claude** (2).
 
-Answer buttons carry digit hotkeys (1 to 3; 1 and 2 on a flaw card), which the band also fires when the user types that digit alone into an empty prompt. After an answer, the card shows the explanation for 8 seconds or until the next card, then clears.
+Answer buttons carry digit hotkeys, which the band also fires when the user types that digit alone into an empty prompt. After an answer, the card shows the explanation for 8 seconds, then clears.
 
 The band is shared with other mods, so the card is drawn above `await next(e)` in one `Box`, keeping what other mods show there. With no card on screen, the hook returns `next(e)`.
 
 ### Knowledge map (pane)
 
 - Title row: repo name and the headline number, "You know N% of the code as it is today".
-- One star per area. Size = the area's share of lines. Brightness = its understanding score.
-- A dashed outline marks an area Claude changed since its score was last raised, with "N Claude edits since you looked" under the name.
-- Faint dashed lines join areas that often change together.
-- Clicking a star lists the area's skipped cards so the user can clear a dark zone on purpose.
-- A legend line: bright = you know it, dashed = Claude changed it since, lines = change together.
+- The map: one star per area. Size = the area's share of lines. Brightness = its understanding score. A dashed outline marks an area Claude changed since its score was last raised. The map is a picture and takes no clicks.
+- A legend line: bright = you know it, dashed = Claude changed it since.
+- The area list under the map: one button per area, such as `Billing · 31% · 14 Claude edits since you looked`. Pressing one opens its details: a field to rename it, a list to merge it into another area, and its skipped cards, each of which can be brought back into the band.
+
+The approved mockup also drew faint lines between areas that change together. They are left out of v1: the co-change data is used to group areas, and the lines added clutter without a decision attached.
 
 ### Codebase Wrapped (pane)
 
-Four numbers (areas mastered, flaws caught, cards answered, dark zones left), the week's biggest jump ("Firestore rules, 20% to 55%"), and **Copy image**.
+Four numbers in bordered tiles (areas mastered, flaws caught, cards answered, dark zones left), the week's biggest jump ("Firestore rules, 20% to 55%"), and **Copy**. Built from `Box` and `Text`, so it looks the same in the Desktop app and the terminal.
 
 ### Surfaces
 
 | Surface | Map | Cards | Wrapped |
 | --- | --- | --- | --- |
-| Desktop app (primary) | `Svg` in a `Pane` | `AbovePrompt` band | `Svg` in a `Pane` |
-| Terminal | `Raster` grid in a `Pane`, same layout as cells | `AbovePrompt` band, drawn as text | Text and numbers in a `Pane`; no Copy image |
+| Desktop app (primary) | `Svg` in a `Pane` | `AbovePrompt` band | `Box` tiles in a `Pane` |
+| Terminal | `Raster` grid in a `Pane`, same layout as cells | `AbovePrompt` band, drawn as text | `Box` tiles in a `Pane` |
 | VS Code extension | Not supported in v1 | Not supported in v1 | Not supported in v1 |
 
-VS Code is out of v1 because it doesn't draw `AbovePrompt`. The mod checks `e.surface` and draws a one-line "Apprentice supports the Desktop app and the terminal" note in its pane there.
+VS Code is out of v1 because it doesn't draw `AbovePrompt`. There, the pane shows one line: "Apprentice supports the Desktop app and the terminal."
 
 Panes open only from a command or a press, never on their own, because a pane a mod opens unasked doesn't appear in a terminal narrower than 144 columns.
 
 ## 4. Architecture
 
-One plugin with a pure core inside it. The core is plain TypeScript with no mods API, so it is unit-tested directly and a CLI or web version can reuse it later. A thin hooks layer connects it to Claude Code.
+One plugin with a pure core inside it. Claude Code loads `.ts` files directly, so there is no build step and no Node toolchain. The core is plain TypeScript with no mods API, so it is tested directly and a CLI or web version can reuse it later. A thin hooks module connects it to Claude Code.
 
 ```
 apprentice/
 ├── .claude-plugin/plugin.json
-├── hooks/hooks.json            → "modules": ["./register.js"] (built)
+├── hooks/
+│   ├── hooks.json              "modules": ["./register.ts"]
+│   └── register.ts             every hook and every mods API call
 ├── src/
 │   ├── core/
-│   │   ├── areas.ts            group folders into areas, keep names and renames
-│   │   ├── understanding.ts    seed, dim, relight; the headline number
-│   │   ├── levels.ts           pick the card level per area
-│   │   └── wrapped.ts          weekly summary from the answer log
+│   │   ├── types.ts            Area, Card, Answer, Level
+│   │   ├── understanding.ts    seed, dim, relight, levels, the headline number
+│   │   ├── areas.ts            group files into areas; find, rename, merge
+│   │   ├── git.ts              parse git output; repo id
+│   │   └── wrapped.ts          ISO weeks and the weekly summary
 │   ├── cards/
+│   │   ├── exclude.ts          paths that never go to Haiku
 │   │   ├── prompt.ts           build the Haiku request
 │   │   └── parse.ts            validate Haiku's JSON into a Card or nothing
-│   ├── views/
-│   │   ├── map-svg.ts          map for Desktop
-│   │   ├── map-raster.ts       map for the terminal
-│   │   ├── card.ts             band card, both surfaces
-│   │   └── wrapped.ts          Wrapped, both surfaces
-│   └── register.ts             hooks: wires core, cards and views to the mods API
-├── types/index.d.ts            PluginState declarations for $.state
-└── test/                       Vitest for core and cards; *.test.ts for the mod harness
+│   └── views/
+│       ├── elements.ts         the element-constructor type views take
+│       ├── layout.ts           star positions
+│       ├── map-svg.ts          map for Desktop
+│       ├── map-raster.ts       map for the terminal
+│       ├── card.ts             band card
+│       ├── pane.ts             map pane: map, legend, area list, area details
+│       └── wrapped.ts          Wrapped pane
+└── tests/                      *.test.ts, run by `claude plugin test`
 ```
-
-The build bundles `src/register.ts` and everything it imports into one hooks module.
 
 | Unit | Job | Depends on |
 | --- | --- | --- |
-| `core/areas` | Group files into areas; apply renames and merges | File list and co-change pairs, passed in |
-| `core/understanding` | Score each area from 0 to 1; dim on edits; relight on answers | `areas` |
-| `core/levels` | Choose junior, mid or senior per area from the answer history | Answer log |
-| `core/wrapped` | Build the weekly summary | Scores, answer log |
-| `cards` | Build the Haiku request; parse and validate the reply | Nothing from the mods API |
-| `views` | Turn core data into element trees | Element functions passed in |
-| `register` | Hooks, commands, storage, model and git calls | The mods API and everything above |
+| `core/*` | Pure data rules | Nothing |
+| `cards/*` | Build the Haiku request; parse the reply; exclude secret paths | `core/types` |
+| `views/*` | Turn data into element trees, given the element constructors | `core/types` |
+| `hooks/register.ts` | Hooks, commands, storage, model and git calls | The mods API and everything above |
 
-Only `register.ts` touches `$`. Every other unit takes plain data in and returns plain data.
+Only `register.ts` touches `$`. The mods validator allows passing `$` only to functions declared at the top level of the same file, so every mods API call lives there. Views receive the element constructors from `$.ui.resolve(e)` and return trees.
 
 ## 5. Data model
 
-### Area
-
 ```ts
+type Level = 'junior' | 'mid' | 'senior'
+
 type Area = {
   id: string              // stable slug, kept across renames
   name: string            // from Haiku, or the user's rename
-  paths: string[]         // folder prefixes that belong to the area
-  lines: number           // tracked lines at last map
+  paths: string[]         // folder prefixes that belong to the area, such as 'src/billing/'
+  lines: number           // estimated lines at last map
   score: number           // 0 to 1: understanding of the code as it is now
   editsSinceLooked: number
-  level: 'junior' | 'mid' | 'senior'
-  streak: number          // signed: +right answers in a row, −wrong answers in a row
+  level: Level
+  streak: number          // +right answers in a row, or −wrong answers in a row
+}
+
+type QuestionCard = {
+  kind: 'question'; areaId: string; level: 'junior' | 'mid'; file: string
+  question: string; options: [string, string, string]; answer: 0 | 1 | 2
+  explanation: string; editId: string; dimmedBy: number
+}
+
+type FlawCard = {
+  kind: 'flaw'; areaId: string; level: 'senior'; file: string
+  hunk: string            // the edit's diff, at most 40 lines, built by Apprentice
+  haikuSeesFlaw: boolean; summary: string; explanation: string
+  editId: string; dimmedBy: number
+}
+
+type Card = QuestionCard | FlawCard
+
+type Answer = {
+  at: number; areaId: string; level: Level; kind: Card['kind']
+  skipped: boolean; isRight: boolean; flagged: boolean; haikuSeesFlaw: boolean
 }
 ```
 
-### Card
-
-```ts
-type Card =
-  | { kind: 'question'; areaId: string; level: 'junior' | 'mid'; question: string;
-      options: [string, string, string]; answer: 0 | 1 | 2; explanation: string;
-      editId: string; dimmedBy: number }
-  | { kind: 'flaw'; areaId: string; level: 'senior'; hunk: string; file: string;
-      haikuSeesFlaw: boolean; explanation: string; editId: string; dimmedBy: number }
-```
-
 `dimmedBy` is how much the edit lowered the area's score, so a right answer can restore exactly that.
-
-### Answer log entry
-
-```ts
-type Answer = { at: number; areaId: string; level: Card['level']; kind: Card['kind'];
-                outcome: 'right' | 'wrong' | 'skipped' | 'flagged' | 'looks-fine' }
-```
 
 ### Storage
 
 | Data | Where | Key |
 | --- | --- | --- |
-| Areas for a repo | `$.store` | `repo:<repoId>:area:<areaId>`, one key per area |
-| Area list and map layout | `$.store` | `repo:<repoId>:meta` |
-| Answer log | `$.store` | `repo:<repoId>:answers:<ISO week>` |
-| Pending (skipped) cards | `$.store` | `repo:<repoId>:pending:<areaId>`, at most 5 per area, newest kept |
-| The card on screen, quiet-until time | `$.state` | Declared in `types/index.d.ts` |
+| One area | `$.store` | `repo:<repoId>:area:<areaId>` |
+| Area ids, layout seed, week-start scores | `$.store` | `repo:<repoId>:meta` |
+| Answer log for a week | `$.store` | `repo:<repoId>:answers:<ISO week>` |
+| Skipped cards for an area | `$.store` | `repo:<repoId>:pending:<areaId>`, at most 5, newest kept |
+| Week of the last Wrapped toast | `$.store` | `repo:<repoId>:toasted` |
+| The card on screen, quiet-until time, the cards-this-hour list | Module variables | Lost on a reload, which costs at most one card |
 
-`repoId` is the first 16 hex characters of the SHA-256 of the repo's `origin` remote URL, or of the repo root path when there is no remote. One key per area keeps two sessions in one repo from overwriting each other's progress; each write reads the key first, as the [mods docs advise](https://code.claude.com/docs/en/plugins/mods/interface.md#save-from-more-than-one-session). `$.store` holds 4 MiB in total, so answer logs older than 8 weeks are deleted when a new week's key is written.
+`repoId` is the first 16 hex characters of the SHA-256 of the repo's `origin` remote URL, or of the repo root path when there is no remote, from `$.session.repo()`. One key per area keeps two sessions in one repo from overwriting each other: each write reads the key, applies the same pure change, and writes it back, as the [mods docs advise](https://code.claude.com/docs/en/plugins/mods/interface.md#save-from-more-than-one-session). `$.store` holds 4 MiB in total, so answer logs older than 8 weeks are deleted when a new week's key is first written.
 
 ## 6. How it works
 
 ### Mapping a repo
 
-1. `git ls-files` lists tracked files. Each file's line count is estimated as its `$.fs.stat` size divided by 40 bytes. Line counts only weigh star sizes and dimming, so an estimate is enough (see open questions).
-2. `git log --name-only --format=%x00 -n 500` gives co-change pairs: files changed in the same commit.
-3. `core/areas` groups files:
-   - Start from top-level folders. Split any folder over 25% of all lines into its subfolders, repeatedly. Merge folders under 2% of lines into an "Other" area.
-   - Merge two areas when more than 60% of their commits touch both.
-   - Stop when there are 6 to 15 areas; if still over 15, merge the smallest pairs with the most co-change.
-4. One `$.model.complete` call with `model: 'haiku'` names all areas from their paths and five sample file names each. The reply is JSON `{ "<areaId>": "<name>" }`. If it fails, areas keep their folder names.
-5. Seed: for each area, sample up to 20 files (largest first), run `git blame --line-porcelain` on each, and count lines whose `author-mail` matches `git config user.email`. Score = your lines ÷ sampled lines, capped at 0.9 so no area starts "mastered".
+All git commands run through `$.process.run` with `cwd` set to the repo root and `timeoutMs: 600000`, the 10-minute maximum. Mapping starts from a `$.clock.after(0, …)` timer so the command returns at once; the pane redraws as results arrive.
 
-All git work runs through `$.process.spawn`, which streams output, so a long `git log` or `git blame` doesn't hit `$.process.run`'s 30-second default. It starts from the `command.run` hook, which returns at once; the pane updates as results arrive.
+1. `git ls-tree -r -l HEAD` lists tracked files with their sizes. Each file's lines are estimated as `max(1, round(size ÷ 40))`. Line counts only weigh star sizes and dimming, so an estimate is enough.
+2. `git log --name-only --format=@@commit -n 500` gives the files changed together in each of the last 500 commits.
+3. `core/areas` groups files:
+   - Start from top-level folders. Files at the repo root form a "Root files" group.
+   - Split the largest group over 25% of all lines into its subfolders (its direct files stay as their own group), and repeat until no group over 25% can split.
+   - Merge every group under 2% of lines into one "Other" area.
+   - Merge the pair with the highest co-change (commits touching both ÷ commits touching either, counting only groups with at least 3 commits) while that ratio is over 0.6 and more than 6 groups remain.
+   - While more than 15 groups remain, merge the two smallest.
+4. One `$.model.complete` call with `model: 'haiku'` names all areas from their paths and up to five file names each. The reply is JSON `{ "<areaId>": "<name>" }`. Any area missing from a valid reply, or all of them when the call fails, keeps its default name.
+5. Seed: for each area, sample its 20 largest files, run `git blame --line-porcelain -- <file>` on each, and count `author-mail` lines that match `git config user.email`. Score = your lines ÷ sampled lines, capped at 0.9 so no area starts mastered. Level starts at junior under 0.4, mid under 0.75, senior otherwise.
 
 ### Dimming on an edit
 
-A `tool.call` hook matches `Edit`, `Write` and `MultiEdit`. It calls `next(e)` first, so the edit is never delayed, then:
+A `tool.call` hook matches `Edit`, `Write` and `MultiEdit`. It awaits `next(e)`, so the edit runs first and is never delayed by Apprentice. Then, if the result has no `deny` and no `isError`:
 
-1. Finds the area by the longest matching path prefix of `file_path`. A file outside every area goes to "Other".
-2. Estimates changed lines from the tool input: `old_string` and `new_string` line counts for `Edit`, the sum over edits for `MultiEdit`, the new content's line count for `Write`.
-3. Applies `dim = min(score, changedLines ÷ area.lines)`, then `score -= dim` and `editsSinceLooked += 1`.
-4. If this is the turn's first edit, cards aren't quiet, the hourly cap isn't reached, and the file isn't excluded (section 7), it starts card generation without awaiting it.
+1. Finds the area by the longest path prefix that matches the edited file's path relative to the repo root. A file under no area's prefix is ignored.
+2. Estimates changed lines: the larger of `old_string` and `new_string` line counts for `Edit`, the sum of that over `edits` for `MultiEdit`, and the `content` line count for `Write`.
+3. Applies `dimmedBy = min(score, changedLines ÷ area.lines)`, then `score −= dimmedBy` and `editsSinceLooked += 1`, in memory and in the store.
+4. If this is the turn's first edit, cards aren't quiet, fewer than 6 cards were shown in the last hour, and the path isn't excluded (section 7), it starts card generation from a `$.clock.after(0, …)` timer.
 
-The turn's "first edit" is tracked from `turn.start`, which resets a flag.
+A `turn.start` hook with no `agentId` (the main conversation) clears the first-edit flag.
 
 ### Making a card
 
-`cards/prompt.ts` builds one `$.model.complete` request:
+`cards/prompt.ts` builds one `$.model.complete` request: `model: 'haiku'`, `maxTokens: 600`, `timeoutMs: 20000`, a `system` text with the instructions and JSON shape for the level, and a `prompt` with the area name, the file path, and the edit's diff (old lines prefixed `-`, new lines prefixed `+`, at most 120 lines).
 
-- `model: 'haiku'`, `maxTokens: 600`, `timeoutMs: 20000`.
-- `prompt` as blocks: the static instructions and JSON schema first with `cache: true`, then the area name, the level, the file path, and the edit's diff (`old_string` → `new_string`, at most 120 lines; longer diffs are cut to the first 120).
-- Level guidance: junior asks what the change does or why; mid asks what would break or what it depends on; senior returns the hunk and whether Haiku sees a flaw, with a one-paragraph explanation either way.
+- Junior asks what the change does or why.
+- Mid asks what would break or what it depends on.
+- Senior returns whether Haiku sees a flaw, a one-sentence summary of it (or of why it looks fine), and an explanation.
 
-`cards/parse.ts` accepts only JSON that matches the `Card` shape: exactly three non-empty options, an answer index of 0 to 2, an explanation under 600 characters, a hunk under 40 lines. Anything else returns nothing, and no card is shown.
+`cards/parse.ts` takes the text between the first `{` and the last `}`, parses it, and accepts only the expected shape: three non-empty options, an answer of 0, 1 or 2, an explanation of at most 600 characters, a summary of at most 200. Anything else returns nothing, and no card is shown. The flaw card's hunk is Apprentice's own diff, cut to 40 lines, not Haiku's text.
 
 ### Answering
 
-| Outcome | Score | Level streak |
+Both card kinds score as right or wrong. On a question card, right means picking the answer Haiku marked. On a flaw card, right means **Flag to Claude** when Haiku saw a flaw and **Looks fine** when it didn't. The explanation always says it is Haiku's view, not a verdict on the code.
+
+| Outcome | Score | Streak |
 | --- | --- | --- |
-| Right | `+ dimmedBy`, plus 0.02 (capped at 1) | `streak = max(streak, 0) + 1` |
-| Wrong | `+ dimmedBy × 0.25` | `streak = min(streak, 0) − 1` |
-| Looks fine | `+ dimmedBy` | No change |
-| Flagged | `+ dimmedBy` | `streak = max(streak, 0) + 1` |
+| Right | `+ dimmedBy + 0.02`, at most 1 | `max(streak, 0) + 1` |
+| Wrong | `+ dimmedBy × 0.25` | `min(streak, 0) − 1` |
 | Skipped | No change | No change |
 
-Any answer except Skip sets `editsSinceLooked` to 0. A streak of +3 moves the area up a level and resets the streak; −2 moves it down and resets. Areas start at junior if their score is under 0.4, mid under 0.75, senior otherwise.
+Right and wrong set `editsSinceLooked` to 0. A streak of +3 moves the area up a level and resets the streak to 0; −2 moves it down and resets it. Senior is the top and junior the bottom.
 
-On a flaw card the user is right with **Looks fine** when Haiku saw no flaw, and right with **Flag to Claude** when it did. The explanation always says it is Haiku's opinion, not a verdict on the code.
+Each answer, skipped or not, is appended to the week's answer log.
 
 ### Flag to Claude
 
-`$.prompt.submit({ text })` with:
+`$.prompt.submit({ text })`, not awaited (it resolves only when the next turn starts), with:
 
-> Apprentice flag on `<file>`: the user reviewed this change and is concerned: "<Haiku's flaw summary, or 'something looks wrong here'>". Check whether it was intended, and fix it if not.
+> Apprentice flag on `<file>`: the user reviewed this change and is concerned: "<summary>". Check whether it was intended, and fix it if not.
 
-Not awaited, because `submit` resolves only when the next turn starts. If the result reports a drop because the user stopped the turn, the text is kept and resubmitted from the next `turn.complete`, as the [mods API docs show](https://code.claude.com/docs/en/plugins/mods/api.md#retry-a-refused-or-dropped-call).
+If the result reports that the prompt was dropped because the user stopped the turn, the text is kept and submitted again from the next `turn.complete`, as the [mods API docs show](https://code.claude.com/docs/en/plugins/mods/api.md#retry-a-refused-or-dropped-call).
 
 ### Headline number
 
@@ -267,15 +276,15 @@ Not awaited, because `submit` resolves only when the next turn starts. If the re
 
 ### Wrapped
 
-Computed from the current ISO week's answer log and area scores at the start and end of the week (stored in `meta` on the first event of each week):
+Computed from the current ISO week's answer log, the area scores now, and the scores at the start of the week (saved in `meta` by the first answer of each week):
 
-- Areas mastered: areas that crossed 0.8 this week.
-- Flaws caught: flagged answers on cards where Haiku saw a flaw.
-- Cards answered: entries other than Skip.
-- Dark zones left: areas under 0.3.
-- Biggest jump: the area with the largest score gain, with its start and end percent.
+- Areas mastered: areas that were under 0.8 at the start of the week and are at or over 0.8 now.
+- Flaws caught: answers with `flagged` and `haikuSeesFlaw`.
+- Cards answered: answers not skipped.
+- Dark zones left: areas under 0.3 now.
+- Biggest jump: the area with the largest gain, with its start and end percent; none when nothing rose.
 
-A `session.start` timer checks once an hour and toasts once per week when the week has at least 5 answers.
+An hourly `$.clock.every` timer toasts once per week when the week has at least 5 answers.
 
 ## 7. Errors and limits
 
@@ -283,37 +292,41 @@ The rule: Apprentice never blocks Claude or the user, and never shows an error w
 
 | Case | Behaviour |
 | --- | --- |
-| Haiku fails, times out, or returns invalid JSON | No card this turn. The dimming still counts. A line goes to the debug log. |
-| Not a git repo | Cards work. Areas come from folders with no co-change step. The map starts dark and says "No git history: scores start at zero." |
-| `git blame` is slow or the repo is huge | Seed sampling caps at 20 files per area; the pane shows progress; scores fill in as each area finishes. |
-| Secrets | Edits to files matching `.env*`, `*.pem`, `*.key`, `id_*`, `*secret*`, `*credential*`, or ignored by `.gitignore` (checked with `git check-ignore`) never go to Haiku. They still dim. |
-| Cost | At most 6 cards an hour by default (`userConfig.cardsPerHour`). Naming is one call per repo per remap. |
-| Two sessions in one repo | Per-area keys, read before write. A lost update costs at most one answer's relight. |
+| Haiku fails, times out, or returns invalid JSON | No card this turn. The dimming still counts. |
+| Not a git repo | The pane says "Apprentice needs a git repo"; nothing else happens. |
+| A git command fails during mapping | Mapping stops, and the pane says which step failed. `/apprentice remap` tries again. |
+| Large repo | Blame samples at most 20 files per area; the pane shows progress as each area finishes. |
+| Secrets | Paths matching `.env*`, `*.pem`, `*.key`, `id_rsa*`, `id_ed25519*`, `*secret*` or `*credential*`, or ignored by git (`git check-ignore -q`), never go to Haiku. They still dim. |
+| Cost | At most 6 cards an hour. Naming is one call per map. A user setting for the cap is left for later, until someone asks for it. |
+| Two sessions in one repo | Per-area keys, read before write. |
 | Pane in a narrow terminal | Opened only from commands or presses, so it always appears. |
-| VS Code | A one-line note in the pane; no hooks draw elsewhere. |
-| User stops a turn | A pending card stays; a flag is retried after the next input, as in section 6. |
+| VS Code | One line in the pane; the band hook draws nothing there. |
+| User stops a turn | A card on screen stays; a dropped flag is retried after the next turn. |
 
 ## 8. Testing
 
-Test first, per the author's workflow.
+Test first, per the author's workflow. Every test runs with `claude plugin test`, which loads `.ts` test files from `tests/`; no Node install is needed.
 
-- **Core (Vitest):** area grouping on fixture file lists and co-change pairs, including the split, merge and 6-to-15 bounds; seeding from fixture blame counts; dimming, relighting and the cap; level changes from streaks; the headline number; Wrapped totals across a week boundary.
-- **Cards (Vitest):** `parse.ts` against saved Haiku replies: valid question and flaw cards, wrong option counts, out-of-range answers, extra prose around the JSON, truncated JSON. `prompt.ts` snapshot tests for each level, and diff truncation at 120 lines.
-- **Mod (`claude plugin test`):** with the model and process calls stubbed: an `Edit` dims the right area and produces one card per turn; a second edit in the turn produces none; Quiet 1h suppresses cards; pressing 1, 2 or 3 records the outcome; Flag calls `$.prompt.submit`; the map renders as `Svg` on the `desktop` surface and as `Raster` on `terminal`; excluded files never reach the model stub.
+- **Core:** grouping on fixture file lists and commits (top-level groups, splitting, "Other", co-change merges, the cap of 15); finding an area by path; rename and merge; seeding; dimming; answering and level changes; the headline number; git output parsing; ISO weeks and Wrapped totals.
+- **Cards:** the request for each level and diff truncation; `parse.ts` against valid question and flaw replies, wrong option counts, out-of-range answers, prose around the JSON, truncated JSON; the secret-path list.
+- **Views:** trees built with fake element constructors: buttons and hotkeys on each card kind, the area list, the Svg on `desktop` and the Raster on `terminal`.
+- **Mod:** with the store, process, model and UI calls stubbed: `/apprentice` maps a fixture repo; an `Edit` dims the right area and produces one card per turn; a second edit in the turn produces none; quiet and the hourly cap suppress cards; pressing 1, 2 or 3 records the outcome and relights the area; Flag calls `$.prompt.submit`; excluded files never reach the model stub; the pane and band render on `desktop` and `terminal`.
 - **Manual:** a week of real use on `dogbase-web-app-v2` and `trustbut`, checking that the areas make sense to their author and that cards are worth answering.
 
 ## 9. Scope
 
 ### v1
 
-Map (Desktop `Svg`, terminal `Raster`), adaptive cards (question and spot-the-flaw), Flag to Claude, Codebase Wrapped, the four commands, renaming and merging areas.
+Map (Desktop `Svg`, terminal `Raster`), adaptive cards (question and spot-the-flaw), Flag to Claude, Codebase Wrapped, `/apprentice` and its three arguments, renaming and merging areas.
 
 ### Later
 
+- Lines between areas that change together on the map.
 - Streaks (a daily counter). Left out of v1 because it can nag.
 - Team view: teammates' maps for onboarding. Needs a sharing mechanism.
 - VS Code support, once it draws `AbovePrompt`, or with cards moved into a pane there.
 - Cards for edits made by people, not only Claude.
+- Repos without git.
 
 ## 10. Decisions
 
@@ -321,21 +334,28 @@ Map (Desktop `Svg`, terminal `Raster`), adaptive cards (question and spot-the-fl
 | --- | --- | --- | --- |
 | Primary surface | Desktop `Svg` | Terminal `Raster` first | The map is the visual hook; the author works in Desktop; the terminal still gets a fallback |
 | Understanding signal | Git authorship seed, dim on Claude's edits, relight with cards | Cards only; self-reported | Makes the map meaningful to seniors on day one and turns Claude's edits into visible debt |
-| Areas | Folders grouped automatically, named once by Haiku, user can rename | Plain folders | Readable at a glance; one model call per repo |
+| Areas | Folders grouped automatically, named once by Haiku, user can rename | Plain folders | Readable at a glance; one model call per map |
 | Card timing | One card per editing turn, never blocking | Only on demand | Every-turn use without nagging |
 | Game layer | Light: Wrapped only | XP, levels, characters | Reads as childish to the senior developers the project wants to impress |
-| Structure | One mod with a pure core | All logic in hooks; separate npm package | Testable and reusable without publishing two packages before anyone uses either |
+| Structure | One mod with a pure core, no build step | All logic in hooks; separate npm package | Testable and reusable without publishing two packages before anyone uses either |
+| Test runner | `claude plugin test` for everything | Vitest for the core | One runner, no Node toolchain; the kit imports plain `.ts` files |
+| Area interaction | Buttons in a list under the map | Clicking stars | `Svg` is drawn as an image and takes no presses |
+| Wrapped sharing | Copy as text | Copy as image | The mods API copies text; no way to render the SVG to a PNG inside the mod |
 
 ## 11. Open questions
 
-- [ ] Does `tool.call` fire for subagents' edits with the same fields? If not, subagent edits need `classic.PostToolUse`.
-- [ ] Can `Copy image` render the Wrapped `Svg` to a PNG inside the mod, or does it copy the SVG text?
-- [ ] Is a line estimate from file size good enough for dimming, or should mapping count lines exactly for files under 1 MiB?
+- [ ] Is a line estimate from file size good enough for dimming, or should mapping count lines exactly for small files?
+
+Resolved while planning (2026-10-23): `tool.call` fires for subagents' tool calls too ([events docs](https://code.claude.com/docs/en/plugins/mods/events.md#guard-or-change-a-tool-call)), and Wrapped copies text, not an image.
 
 ## Sources
 
 - [Mods overview](https://code.claude.com/docs/en/plugins/mods/overview)
+- [Create a mod](https://code.claude.com/docs/en/plugins/mods/create.md)
+- [React to events](https://code.claude.com/docs/en/plugins/mods/events.md)
 - [Mods API](https://code.claude.com/docs/en/plugins/mods/api.md)
 - [Draw in the interface](https://code.claude.com/docs/en/plugins/mods/interface.md)
+- [Test a mod](https://code.claude.com/docs/en/plugins/mods/test.md)
 - [Mods reference](https://code.claude.com/docs/en/plugins/mods/reference.md)
+- [Mods type declarations](https://github.com/anthropics/claude-code/blob/main/mods/types/claude-code.d.ts)
 - [claude-mods.com](https://claude-mods.com/)
