@@ -479,7 +479,7 @@ export function register(on: any) {
     return E.Box({
       flexDirection: 'column',
       children: [
-        renderCard(E, { card: shown, areaName, revealed }, {
+        renderCard(E, { card: shown, areaName, revealed, maxRows: Number(e.props?.maxRows) || undefined }, {
           onAnswer: (index: number) => answerCard($, shown, shown.kind === 'question' && index === shown.answer, false),
           onFlaw: (pressed: 'flag' | 'looks-fine') =>
             answerCard($, shown, shown.kind === 'flaw' && isFlawAnswerRight(shown, pressed), pressed === 'flag'),

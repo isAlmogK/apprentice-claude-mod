@@ -52,3 +52,15 @@ test('a revealed card shows the result and the explanation, without buttons', as
   expect(textsOf(tree)).toContain("Haiku's view, not a verdict on the code.")
   expect(byKey(tree, 'ans-0')).toBeUndefined()
 })
+
+test('a flaw card trims its hunk to fit the band', async () => {
+  const body = Array.from({ length: 40 }, (_, i) => `+line ${i}`)
+  const hunk = [...body, '… 10 more lines'].join('\n')
+  const tree = renderCard(fakeElements, { card: { ...flaw, hunk }, areaName: 'Auth', revealed: null, maxRows: 12 }, handlers)
+  expect(byKey(tree, 'hunk')?.props.source).toBe([...body.slice(0, 5), '… 45 more lines'].join('\n'))
+  const plain = renderCard(fakeElements, { card: { ...flaw, hunk: body.join('\n') }, areaName: 'Auth', revealed: null, maxRows: 4 }, handlers)
+  expect(byKey(plain, 'hunk')?.props.source).toBe([...body.slice(0, 3), '… 37 more lines'].join('\n'))
+  const roomy = renderCard(fakeElements, { card: { ...flaw, hunk }, areaName: 'Auth', revealed: null, maxRows: 60 }, handlers)
+  expect(byKey(roomy, 'hunk')?.props.source).toBe(hunk)
+  expect(byKey(renderCard(fakeElements, { card: { ...flaw, hunk }, areaName: 'Auth', revealed: null }, handlers), 'hunk')?.props.source).toBe(hunk)
+})

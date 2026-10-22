@@ -213,3 +213,15 @@ test('an edit in a new top-level folder dims nothing and makes no card', async (
   expect(await areaIn(w, 'root')).toEqual(before)
   expect(cardCalls(w)).toBe(0)
 })
+
+test('the band trims a long spot-the-flaw hunk to its rows', async ($, on) => {
+  const w = stubWorld(on)
+  await mapFixture($, w)
+  await $.turn.start({ turnId: 't1' })
+  const lines = Array.from({ length: 30 }, (_, i) => `log(${i})`).join('\n')
+  await $.tool.call({ tool: 'Edit', file_path: BILLING, old_string: 'a', new_string: lines })
+  await until(w, () => bandHas($, 'flaw-flag'))
+  const ui = await $.ui.mount(bandSite('desktop'))
+  const hunk = await ui.find({ type: 'Code' })
+  expect(String(hunk?.text).split('\n')).toEqual(['-a', '+log(0)', '+log(1)', '+log(2)', '+log(3)', '… 26 more lines'])
+})
