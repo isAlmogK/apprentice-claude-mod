@@ -189,3 +189,13 @@ export function mergeAreas(list: Area[], fromId: string, intoId: string): Area[]
   }
   return list.filter(a => a !== from).map(a => (a === into ? merged : a))
 }
+
+// A remap keeps what was learned: areas whose id survives keep score, level, streak and edits,
+// and take only the new paths and lines. Areas with a new id are returned as they are.
+export function carryProgress(previous: Area[], next: Area[]): Area[] {
+  const old = new Map(previous.map(a => [a.id, a]))
+  return next.map(a => {
+    const p = old.get(a.id)
+    return p ? { ...a, score: p.score, level: p.level, streak: p.streak, editsSinceLooked: p.editsSinceLooked } : a
+  })
+}

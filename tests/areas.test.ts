@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { Area } from '../src/core/types.ts'
-import { areaForPath, draftToArea, groupAreas, mergeAreas, renameArea } from '../src/core/areas.ts'
+import { areaForPath, carryProgress, draftToArea, groupAreas, mergeAreas, renameArea } from '../src/core/areas.ts'
 
 const file = (path: string, lines: number) => ({ path, lines })
 
@@ -75,4 +75,15 @@ test('mergeAreas joins paths and weighs scores by lines', async () => {
   const merged = mergeAreas([area('a', { score: 1, lines: 300, editsSinceLooked: 1 }), area('b', { score: 0, lines: 100, editsSinceLooked: 2 })], 'b', 'a')
   expect(merged).toEqual([{ id: 'a', name: 'a', paths: ['a/', 'b/'], lines: 400, score: 0.75, editsSinceLooked: 3, level: 'mid', streak: 0 }])
   expect(mergeAreas([area('a')], 'a', 'a')).toEqual([area('a')])
+})
+
+test('carryProgress keeps learned progress and takes new paths and lines', async () => {
+  const prev: Area[] = [{ id: 'a', name: 'A', paths: ['a/'], lines: 10, score: 0.8, editsSinceLooked: 2, level: 'senior', streak: 3 }]
+  const next = [
+    draftToArea({ id: 'a', name: 'A', paths: ['a/', 'x/'], lines: 50, files: [] }, 0),
+    draftToArea({ id: 'b', name: 'B', paths: ['b/'], lines: 5, files: [] }, 0),
+  ]
+  const out = carryProgress(prev, next)
+  expect(out[0]).toMatchObject({ id: 'a', paths: ['a/', 'x/'], lines: 50, score: 0.8, editsSinceLooked: 2, level: 'senior', streak: 3 })
+  expect(out[1]).toMatchObject({ id: 'b', score: 0, level: 'junior', streak: 0 })
 })

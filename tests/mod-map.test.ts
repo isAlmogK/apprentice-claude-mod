@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { areaIn, mapFixture, paneSite, repoId, stubWorld, until } from './helpers.ts'
+import { areaIn, mapFixture, paneSite, repoId, ROOT, stubWorld, until } from './helpers.ts'
 
 test('/apprentice maps the repo, names areas and seeds scores from blame', async ($, on) => {
   const w = stubWorld(on)
@@ -75,4 +75,18 @@ test('an unknown argument prints the usage', async ($, on) => {
   await $.session.start({ surface: 'desktop', isInteractive: true, cwd: '/work/dogbase' })
   const answer = await $.command.run({ command: 'apprentice', args: 'nonsense' })
   expect(answer.text).toBe('Usage: /apprentice [wrapped | quiet [minutes] | remap]')
+})
+
+test('a remap keeps learned progress and takes the new paths and lines', async ($, on) => {
+  const w = stubWorld(on)
+  await mapFixture($, w)
+  const key = `repo:${await repoId()}:area:src-billing`
+  // Pretend an earlier session learned something, with stale paths and lines, then restart so loadAreas reads it.
+  w.store.set(key, { ...(await areaIn(w, 'src-billing')), score: 0.3, level: 'junior', streak: 2, editsSinceLooked: 4, lines: 7, paths: ['old/'] })
+  await $.session.start({ surface: 'desktop', isInteractive: true, cwd: ROOT })
+  w.store.delete(`repo:${await repoId()}:meta`)
+  w.modelCalls.length = 0
+  await $.command.run({ command: 'apprentice', args: 'remap' })
+  await until(w, async () => w.store.has(`repo:${await repoId()}:meta`))
+  expect(await areaIn(w, 'src-billing')).toMatchObject({ score: 0.3, level: 'junior', streak: 2, editsSinceLooked: 4, lines: 100, paths: ['src/billing/'] })
 })

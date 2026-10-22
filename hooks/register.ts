@@ -1,4 +1,4 @@
-import { areaForPath, draftToArea, groupAreas, mergeAreas, renameArea, type AreaDraft } from '../src/core/areas.ts'
+import { areaForPath, carryProgress, draftToArea, groupAreas, mergeAreas, renameArea, type AreaDraft } from '../src/core/areas.ts'
 import { BLAME_SAMPLE, parseBlame, parseLog, parseLsTree, repoIdFrom, repoNameOf, sampleFiles } from '../src/core/git.ts'
 import type { Area, Card } from '../src/core/types.ts'
 import { initialLevel, seedScore } from '../src/core/understanding.ts'
@@ -85,13 +85,16 @@ async function mapRepo($: any): Promise<void> {
     step = 'naming areas'
     const names = await nameAreas($, drafts)
     const kept = new Map(areas.map(a => [a.id, a.name]))
-    areas = drafts.map(d => draftToArea({ ...d, name: kept.get(d.id) ?? names[d.id] ?? d.name }, 0))
+    const previous = areas
+    const known = new Set(previous.map(a => a.id))
+    areas = carryProgress(previous, drafts.map(d => draftToArea({ ...d, name: kept.get(d.id) ?? names[d.id] ?? d.name }, 0)))
+    const fresh = drafts.filter(d => !known.has(d.id))
     $.ui.invalidate('ui.render')
     step = 'reading your git email'
-    const email = (await runGit($, r.root, ['config', 'user.email'])).stdout.trim()
+    const email = fresh.length > 0 ? (await runGit($, r.root, ['config', 'user.email'])).stdout.trim() : ''
     step = 'seeding scores'
-    for (let i = 0; i < drafts.length; i++) {
-      const draft = drafts[i]
+    for (let i = 0; i < fresh.length; i++) {
+      const draft = fresh[i]
       let mine = 0
       let total = 0
       if (email !== '') {
@@ -105,7 +108,7 @@ async function mapRepo($: any): Promise<void> {
       }
       const score = seedScore(mine, total)
       areas = areas.map(a => (a.id === draft.id ? { ...a, score, level: initialLevel(score) } : a))
-      progress = `Mapping your repo… ${i + 1} of ${drafts.length} areas seeded`
+      progress = `Mapping your repo… ${i + 1} of ${fresh.length} areas seeded`
       $.ui.invalidate('ui.render')
     }
     step = 'saving'
