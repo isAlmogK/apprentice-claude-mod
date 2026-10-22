@@ -58,13 +58,16 @@ export function buildCardRequest(areaName: string, level: Level, edit: EditText)
   }
 }
 
-export function buildNamingRequest(drafts: AreaDraft[]): { system: string; prompt: string } {
-  const lines = drafts.map(d => {
+// Areas made only of secret paths are left out entirely (they keep their default names), so neither
+// their folders nor their ids reach Haiku. ids lists the areas the prompt names.
+export function buildNamingRequest(drafts: AreaDraft[]): { system: string; prompt: string; ids: string[] } {
+  const named = drafts.filter(d => !(d.paths.every(isSecretPath) && d.files.every(f => isSecretPath(f.path))))
+  const lines = named.map(d => {
     const folders = d.paths.filter(p => !isSecretPath(p)).map(p => p || '(repo root)').join(', ')
     const files = sampleFiles(d.files.filter(f => !isSecretPath(f.path)), 5).map(f => f.path).join(', ')
     return `${d.id}: folders ${folders}; files ${files}`
   })
-  return { system: NAMING_SYSTEM, prompt: lines.join('\n') }
+  return { system: NAMING_SYSTEM, prompt: lines.join('\n'), ids: named.map(d => d.id) }
 }
 
 export function flagPromptText(card: FlawCard): string {

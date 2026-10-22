@@ -69,7 +69,7 @@ export type World = {
   toasts: string[]
   copied: string[]
   modelCalls: any[]
-  gitCalls: { args: string; cwd: string }[]
+  gitCalls: { args: string; cwd: string; argv: string[] }[]
   commands: string[]
   clock: any
 }
@@ -108,7 +108,7 @@ export function stubWorld(on: any, opts: WorldOptions = {}): World {
     const argv: string[] = e.argv.slice(1)
     while (argv[0] === '-c') argv.splice(0, 2)
     const args = argv.join(' ')
-    w.gitCalls.push({ args, cwd: e.init?.cwd ?? '' })
+    w.gitCalls.push({ args, cwd: e.init?.cwd ?? '', argv: [...e.argv] })
     const hit = Object.entries(git).find(([k]) => args.startsWith(k))
     return { value: hit ? { exitCode: hit[1].exitCode ?? 0, stdout: hit[1].stdout, stderr: '' } : { exitCode: 1, stdout: '', stderr: 'no stub' } }
   })

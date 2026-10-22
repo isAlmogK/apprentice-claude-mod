@@ -39,7 +39,8 @@ function metaKey(): string {
 }
 
 async function runGit($: any, root: string, args: string[]): Promise<{ exitCode: number; stdout: string }> {
-  return $.process.run(['git', ...args], { cwd: root, timeoutMs: GIT_TIMEOUT_MS })
+  // core.quotepath=false: paths with non-ASCII characters come back as they are, not quoted
+  return $.process.run(['git', '-c', 'core.quotepath=false', ...args], { cwd: root, timeoutMs: GIT_TIMEOUT_MS })
 }
 
 // The working tree an edited file lives in, found among the repo's worktrees (longest root wins).
@@ -86,9 +87,10 @@ function putArea(saved: Area | undefined): void {
 
 async function nameAreas($: any, drafts: AreaDraft[]): Promise<Record<string, string>> {
   const request = buildNamingRequest(drafts)
+  if (request.ids.length === 0) return {}
   try {
     const reply = await $.model.complete({ model: 'haiku', system: request.system, prompt: request.prompt, maxTokens: 600, timeoutMs: 20000 })
-    return reply.isAnswered ? parseAreaNames(reply.text, drafts.map(d => d.id)) : {}
+    return reply.isAnswered ? parseAreaNames(reply.text, request.ids) : {}
   } catch {
     return {}
   }
@@ -212,9 +214,13 @@ let firstEditDone = false
 
 async function makeCard($: any, ctx: CardContext): Promise<void> {
   if (!repo) return
+  // Exit 1 is the only "not ignored": 0 is ignored, and anything else is a git error, so fail closed.
   const ignored = await runGit($, ctx.root, ['check-ignore', '-q', ctx.edit.file])
-  if (ignored.exitCode === 0) return
+  if (ignored.exitCode !== 1) return
   const request = buildCardRequest(ctx.areaName, ctx.level, ctx.edit)
+  // Count the request, not the card shown, so replies that never make a card still count against the cap.
+  const asked = await $.clock.now()
+  cardTimes = [...cardsWithinHour(cardTimes, asked), asked]
   let reply: any
   try {
     reply = await $.model.complete({ model: 'haiku', system: request.system, prompt: request.prompt, maxTokens: 600, timeoutMs: 20000 })
@@ -227,10 +233,10 @@ async function makeCard($: any, ctx: CardContext): Promise<void> {
     dimmedBy: ctx.dimmedBy, hunk: diffOf(ctx.edit, MAX_HUNK_LINES),
   })
   if (!parsed) return
-  const now = await $.clock.now()
+  // Cards may have been paused while Haiku was answering.
+  if ((await $.clock.now()) < quietUntil) return
   card = parsed
   revealed = null
-  cardTimes = [...cardsWithinHour(cardTimes, now), now]
   $.ui.invalidate('ui.render')
 }
 
@@ -249,12 +255,8 @@ async function logAnswer($: any, c: Card, outcome: { skipped: boolean; isRight: 
 async function answerCard($: any, c: Card, isRight: boolean, flagged: boolean): Promise<void> {
   if (!repo || card !== c || revealed) return
   revealed = { isRight }
-  await ensureWeekStart($, await $.clock.now())
   $.ui.invalidate('ui.render')
-  putArea(await updateArea($, repo, c.areaId, a => applyAnswer(a, c.dimmedBy, isRight)))
-  $.ui.invalidate('ui.render')
-  await logAnswer($, c, { skipped: false, isRight, flagged })
-  if (flagged && c.kind === 'flaw') submitFlag($, flagPromptText(c))
+  // Clear and flag first, so a store failure below never leaves the card stuck or drops the flag.
   $.clock.after(REVEAL_MS, () => {
     if (card === c) {
       card = null
@@ -262,6 +264,16 @@ async function answerCard($: any, c: Card, isRight: boolean, flagged: boolean): 
       $.ui.invalidate('ui.render')
     }
   })
+  if (flagged && c.kind === 'flaw') submitFlag($, flagPromptText(c))
+  const r = repo
+  try {
+    await ensureWeekStart($, await $.clock.now())
+    putArea(await updateArea($, r, c.areaId, a => applyAnswer(a, c.dimmedBy, isRight)))
+    $.ui.invalidate('ui.render')
+    await logAnswer($, c, { skipped: false, isRight, flagged })
+  } catch {
+    // The answer still shows; only its saving failed.
+  }
 }
 
 async function skipCard($: any, c: Card): Promise<void> {
@@ -340,7 +352,7 @@ async function checkWrappedToast($: any): Promise<void> {
   if (!repo) return
   const week = isoWeek(await $.clock.now())
   const log: Answer[] = (await $.store.get(`repo:${repo.id}:answers:${week}`)) ?? []
-  if (log.length < TOAST_MIN_ANSWERS) return
+  if (log.filter(a => !a.skipped).length < TOAST_MIN_ANSWERS) return
   const toastedKey = `repo:${repo.id}:toasted`
   if ((await $.store.get(toastedKey)) === week) return
   await $.store.set(toastedKey, week)
@@ -354,16 +366,24 @@ async function copyWrapped($: any, text: string): Promise<void> {
 
 export function register(on: any) {
   on('session.start', async ($: any, e: any, next: any) => {
-    const found = await $.session.repo()
-    if (found) {
-      // repo() names the main checkout for every worktree: it keys progress, so all worktrees share it.
-      // Path work uses the session's own working tree.
-      const cwd = String((await $.session.cwd()) ?? found.root)
-      const top = await runGit($, cwd, ['rev-parse', '--show-toplevel'])
-      const root = top.exitCode === 0 && top.stdout.trim() !== '' ? top.stdout.trim() : found.root
-      repo = { id: await repoIdFrom(found.remote ?? found.root), root, name: repoNameOf(found.root) }
-      areas = await loadAreas($, repo)
-      status = areas.length > 0 ? 'ready' : 'idle'
+    try {
+      const found = await $.session.repo()
+      if (found) {
+        // repo() names the main checkout for every worktree: it keys progress, so all worktrees share it.
+        // Path work uses the session's own working tree.
+        const cwd = String((await $.session.cwd()) ?? found.root)
+        const top = await runGit($, cwd, ['rev-parse', '--show-toplevel'])
+        const root = top.exitCode === 0 && top.stdout.trim() !== '' ? top.stdout.trim() : found.root
+        const r: Repo = { id: await repoIdFrom(found.remote ?? found.root), root, name: repoNameOf(found.root) }
+        areas = await loadAreas($, r)
+        repo = r
+        status = areas.length > 0 ? 'ready' : 'idle'
+      }
+    } catch {
+      // Without a repo Apprentice stays off, but /apprentice is still registered and says why.
+      repo = null
+      areas = []
+      status = 'no-git'
     }
     $.clock.every(HOUR_MS, () => checkWrappedToast($))
     await $.command.register({
@@ -378,16 +398,18 @@ export function register(on: any) {
   on('command.run', { command: 'apprentice' }, async ($: any, e: any) => {
     const [sub = '', arg = ''] = String(e.args ?? '').trim().split(/\s+/)
     if (sub === 'quiet') {
-      const minutes = Number(arg) > 0 ? Math.round(Number(arg)) : 60
+      const minutes = Number(arg) > 0 ? Math.max(1, Math.round(Number(arg))) : 60
       await quietCards($, minutes)
-      return { text: `Cards are paused for ${minutes} minutes.` }
+      return { text: `Cards are paused for ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.` }
     }
     if (sub === 'wrapped') {
+      if (!repo) return { text: 'Apprentice needs a git repo.' }
       await $.ui.open({ id: WRAPPED_PANE, title: 'Codebase Wrapped', focus: true, closeOnEscape: true })
       return {}
     }
     if (sub !== '' && sub !== 'remap') return { text: USAGE }
-    if (repo && (sub === 'remap' || status === 'idle' || status === 'failed')) startMapping($)
+    // While a mapping runs, /apprentice remap only opens the pane.
+    if (repo && status !== 'mapping' && (sub === 'remap' || status === 'idle' || status === 'failed')) startMapping($)
     else if (repo && status === 'ready') {
       // Pick up what other sessions in this repo saved since this one loaded.
       const loaded = await loadAreas($, repo)

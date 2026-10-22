@@ -78,3 +78,19 @@ test('a toast says Wrapped is ready once a week, after 5 answers', async ($, on)
   for (let i = 0; i < 20; i++) await w.clock.settle()
   expect(w.toasts.filter(t => t.startsWith('Codebase Wrapped')).length).toBe(1)
 })
+
+test('skipped cards do not count toward the Wrapped toast', async ($, on) => {
+  const id = await repoId()
+  const w = stubWorld(on, { store: { [`repo:${id}:answers:2026-W43`]: [answer(), answer(), answer(), answer(), answer({ skipped: true })] } })
+  await mapFixture($, w)
+  await w.clock.advance(3_600_000)
+  for (let i = 0; i < 20; i++) await w.clock.settle()
+  expect(w.toasts.filter(t => t.startsWith('Codebase Wrapped')).length).toBe(0)
+})
+
+test('/apprentice wrapped outside a repo says it needs one', async ($, on) => {
+  stubWorld(on, { repo: false })
+  await $.session.start({ surface: 'desktop', isInteractive: true, cwd: '/tmp' })
+  const reply = await $.command.run({ command: 'apprentice', args: 'wrapped' })
+  expect(reply.text).toBe('Apprentice needs a git repo.')
+})

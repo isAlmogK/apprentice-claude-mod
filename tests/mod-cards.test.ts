@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { ROOT, areaIn, bandSite, mapFixture, paneSite, repoId, stubWorld, until } from './helpers.ts'
+import { NAMES_REPLY, QUESTION_REPLY, ROOT, areaIn, bandSite, mapFixture, paneSite, repoId, stubWorld, until } from './helpers.ts'
 
 const BILLING = `${ROOT}/src/billing/invoice.ts`
 const AUTH = `${ROOT}/src/auth/login.ts`
@@ -182,7 +182,7 @@ test('an edit in another worktree of the repo dims the right area', async ($, on
   await edit($, `${FEATURE}/src/auth/login.ts`, 't1')
   expect((await areaIn(w, 'src-auth')).editsSinceLooked).toBe(1)
   await until(w, () => w.gitCalls.some(c => c.args.startsWith('check-ignore')))
-  expect(w.gitCalls.find(c => c.args.startsWith('check-ignore'))).toEqual({ args: 'check-ignore -q src/auth/login.ts', cwd: FEATURE })
+  expect(w.gitCalls.find(c => c.args.startsWith('check-ignore'))).toMatchObject({ args: 'check-ignore -q src/auth/login.ts', cwd: FEATURE })
   await edit($, `${NESTED}/src/billing/invoice.ts`, 't2')
   expect((await areaIn(w, 'src-billing')).editsSinceLooked).toBe(1)
 })
@@ -224,4 +224,69 @@ test('the band trims a long spot-the-flaw hunk to its rows', async ($, on) => {
   const ui = await $.ui.mount(bandSite('desktop'))
   const hunk = await ui.find({ type: 'Code' })
   expect(String(hunk?.text).split('\n')).toEqual(['-a', '+log(0)', '+log(1)', '+log(2)', '+log(3)', '… 26 more lines'])
+})
+
+test('a git error from check-ignore keeps the file from Haiku', async ($, on) => {
+  const w = stubWorld(on, { git: { 'check-ignore -q': { exitCode: 128, stdout: '' } } })
+  await mapFixture($, w)
+  await edit($, AUTH, 't1')
+  for (let i = 0; i < 20; i++) await w.clock.settle()
+  expect(cardCalls(w)).toBe(0)
+})
+
+test('git runs with core.quotepath off', async ($, on) => {
+  const w = stubWorld(on)
+  await mapFixture($, w)
+  await edit($, AUTH, 't1')
+  await until(w, () => cardCalls(w) === 1)
+  expect(w.gitCalls.length).toBeGreaterThan(0)
+  expect(w.gitCalls.every(c => c.argv.slice(0, 3).join(' ') === 'git -c core.quotepath=false')).toBe(true)
+})
+
+test('replies that make no card still count against the hourly cap', async ($, on) => {
+  const w = stubWorld(on, { model: (e: any) => (String(e.system).includes('You name areas') ? NAMES_REPLY : 'not a card') })
+  await mapFixture($, w)
+  for (let i = 1; i <= 7; i++) {
+    await edit($, AUTH, `t${i}`)
+    for (let k = 0; k < 20; k++) await w.clock.settle()
+  }
+  expect(cardCalls(w)).toBe(6)
+})
+
+test('a card whose reply arrives after /apprentice quiet is not shown', async ($, on) => {
+  let release: ((text: string) => void) | null = null
+  const w = stubWorld(on, {
+    model: (e: any) => (String(e.system).includes('You name areas') ? NAMES_REPLY : new Promise<string>(r => { release = r })),
+  })
+  await mapFixture($, w)
+  await edit($, AUTH, 't1')
+  await until(w, () => release !== null)
+  await $.command.run({ command: 'apprentice', args: 'quiet 30' })
+  release!(QUESTION_REPLY)
+  for (let i = 0; i < 20; i++) await w.clock.settle()
+  expect(await bandHas($, 'ans-0')).toBe(false)
+})
+
+test('a store failure while answering still clears the card and sends the flag', async ($, on) => {
+  let diskFull = false
+  const w = stubWorld(on, { storeFails: () => diskFull })
+  await mapFixture($, w)
+  await edit($, BILLING, 't1')
+  await until(w, () => bandHas($, 'flaw-flag'))
+  diskFull = true
+  const band = await $.ui.mount(bandSite('desktop'))
+  await band.press({ key: 'flaw-flag' })
+  await band.unmount()
+  await until(w, () => w.submitted.length === 1)
+  await w.clock.advance(8000)
+  for (let i = 0; i < 20; i++) await w.clock.settle()
+  expect(await bandHas($, 'flaw-flag')).toBe(false)
+  expect(await bandHas($, 'skip')).toBe(false)
+})
+
+test('/apprentice quiet rounds to whole minutes, at least one', async ($, on) => {
+  const w = stubWorld(on)
+  await mapFixture($, w)
+  expect((await $.command.run({ command: 'apprentice', args: 'quiet 0.4' })).text).toBe('Cards are paused for 1 minute.')
+  expect((await $.command.run({ command: 'apprentice', args: 'quiet 2.6' })).text).toBe('Cards are paused for 3 minutes.')
 })

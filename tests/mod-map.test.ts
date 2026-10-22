@@ -135,3 +135,21 @@ test('/apprentice reloads the map from the store', async ($, on) => {
   await $.command.run({ command: 'apprentice', args: '' })
   expect(await paneHasText($, 'You know 72% of the code as it is today')).toBe(true)
 })
+
+test('/apprentice remap while mapping opens the pane without a second mapping', async ($, on) => {
+  const w = stubWorld(on)
+  await $.session.start({ surface: 'desktop', isInteractive: true, cwd: ROOT })
+  await $.command.run({ command: 'apprentice', args: '' })
+  await $.command.run({ command: 'apprentice', args: 'remap' })
+  await until(w, async () => w.store.has(`repo:${await repoId()}:meta`))
+  for (let i = 0; i < 30; i++) await w.clock.settle()
+  expect(w.gitCalls.filter(c => c.args.startsWith('ls-tree')).length).toBe(1)
+})
+
+test('a failing repo lookup still registers /apprentice', async ($, on) => {
+  const w = stubWorld(on, { repo: 'throws' })
+  await $.session.start({ surface: 'desktop', isInteractive: true, cwd: ROOT })
+  expect(w.commands).toEqual(['apprentice'])
+  await $.command.run({ command: 'apprentice', args: '' })
+  expect(await paneHasText($, 'Apprentice needs a git repo.')).toBe(true)
+})
