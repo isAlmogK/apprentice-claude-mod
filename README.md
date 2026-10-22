@@ -69,10 +69,10 @@ Everything stays on your machine except what Apprentice asks Haiku, through Clau
 **Never goes to Haiku:**
 
 - Paths that look secret (`.env*`, `*.pem`, `*.key`, `id_rsa*`, `id_ed25519*`, anything with `secret` or `credential` in the path). Their edits still dim the map, but they never get a card.
-- Files git ignores.
+- Files git ignores. If git can't tell, the file is treated as ignored.
 - File contents beyond the edit's diff.
 
-Scores, answers and skipped cards are stored locally in Claude Code's mod store. At most 6 cards are made an hour.
+Scores, answers and skipped cards are stored locally in Claude Code's mod store. At most 6 card requests go to Haiku an hour.
 
 ## Requirements
 
