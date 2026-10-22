@@ -317,28 +317,32 @@ export function register(on: any) {
 
   on('tool.call', { tool: ['Edit', 'Write', 'MultiEdit'] }, async ($: any, e: any, next: any) => {
     const result = await next(e)
-    if (result?.deny || result?.isError || status !== 'ready' || !repo) return result
-    const rel = relativeTo(repo.root, String(e.file_path ?? ''))
-    if (rel === null) return result
-    const area = areaForPath(areas, rel)
-    if (!area) return result
-    const dimmedBy = dimmedByFor(area, changedLinesOf(e.tool, e))
-    areas = areas.map(a => (a.id === area.id ? applyDim(a, dimmedBy) : a))
-    $.ui.invalidate('ui.render')
-    await updateArea($, repo, area.id, a => applyDim(a, dimmedBy))
-    const now = await $.clock.now()
-    const wantsCard = !firstEditDone && now >= quietUntil
-      && cardsWithinHour(cardTimes, now).length < CARDS_PER_HOUR && !isSecretPath(rel)
-    firstEditDone = true
-    if (wantsCard) {
-      const ctx: CardContext = {
-        areaId: area.id, areaName: area.name, level: area.level,
-        edit: { file: rel, ...editTextsOf(e.tool, e) }, dimmedBy, editId: `${now}`,
+    try {
+      if (result?.deny || result?.isError || status !== 'ready' || !repo) return result
+      const rel = relativeTo(repo.root, String(e.file_path ?? ''))
+      if (rel === null) return result
+      const area = areaForPath(areas, rel)
+      if (!area) return result
+      const dimmedBy = dimmedByFor(area, changedLinesOf(e.tool, e))
+      areas = areas.map(a => (a.id === area.id ? applyDim(a, dimmedBy) : a))
+      $.ui.invalidate('ui.render')
+      await updateArea($, repo, area.id, a => applyDim(a, dimmedBy))
+      const now = await $.clock.now()
+      const wantsCard = !firstEditDone && now >= quietUntil
+        && cardsWithinHour(cardTimes, now).length < CARDS_PER_HOUR && !isSecretPath(rel)
+      firstEditDone = true
+      if (wantsCard) {
+        const ctx: CardContext = {
+          areaId: area.id, areaName: area.name, level: area.level,
+          edit: { file: rel, ...editTextsOf(e.tool, e) }, dimmedBy, editId: `${now}`,
+        }
+        $.clock.after(0, () => makeCard($, ctx))
       }
-      $.clock.after(0, () => makeCard($, ctx))
+      return result
+    } catch {
+      return result
     }
-    return result
-  })
+  }).catch(async ($: any, e: any, next: any) => next(e))
 
   on('ui.render', { component: 'AbovePrompt' }, async ($: any, e: any, next: any) => {
     if (!card || e.surface === 'vscode') return next(e)

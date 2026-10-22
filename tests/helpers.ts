@@ -76,6 +76,7 @@ export type WorldOptions = {
   model?: (e: any) => string | null
   repo?: boolean
   store?: Record<string, unknown>
+  storeFails?: () => boolean
 }
 
 export function stubWorld(on: any, opts: WorldOptions = {}): World {
@@ -89,7 +90,7 @@ export function stubWorld(on: any, opts: WorldOptions = {}): World {
   on('command.register', () => ({ value: undefined }))
   on('session.repo', () => ({ value: opts.repo === false ? null : { root: ROOT, remote: REMOTE, internal: false } }))
   on('store.get', ($: any, e: any) => ({ value: w.store.get(e.key) }))
-  on('store.set', ($: any, e: any) => { w.store.set(e.key, e.value); return { value: undefined } })
+  on('store.set', ($: any, e: any) => { if (opts.storeFails?.()) throw new Error('disk full'); w.store.set(e.key, e.value); return { value: undefined } })
   on('store.delete', ($: any, e: any) => { w.store.delete(e.key); return { value: undefined } })
   on('store.keys', () => ({ value: [...w.store.keys()] }))
   on('process.run', ($: any, e: any) => {

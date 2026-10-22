@@ -155,3 +155,13 @@ test('a failed model call shows no card and keeps the dimming', async ($, on) =>
   expect(await bandHas($, 'flaw-flag')).toBe(false)
   expect((await areaIn(w, 'src-billing')).score).toBe(0.73)
 })
+
+test('an edit still succeeds when saving the dimming fails', async ($, on) => {
+  let diskFull = false
+  const w = stubWorld(on, { storeFails: () => diskFull })
+  await mapFixture($, w)
+  diskFull = true
+  await $.turn.start({ turnId: 't1' })
+  const result = await $.tool.call({ tool: 'Edit', file_path: AUTH, old_string: 'a', new_string: 'a\nlog(invoice)' })
+  expect(result).toMatchObject({ result: 'ok' })
+})
