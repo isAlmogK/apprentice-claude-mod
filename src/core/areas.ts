@@ -157,12 +157,18 @@ export function draftToArea(draft: AreaDraft, score: number): Area {
   }
 }
 
+// The '' prefix ("Root files") holds only files at the repo root, so a path in a folder
+// no area lists matches nothing and is ignored.
+function covers(prefix: string, path: string): boolean {
+  return prefix === '' ? !path.includes('/') : path.startsWith(prefix)
+}
+
 export function areaForPath<T extends { paths: string[] }>(list: T[], path: string): T | undefined {
   let best: T | undefined
   let bestLength = -1
   for (const item of list) {
     for (const prefix of item.paths) {
-      if (path.startsWith(prefix) && prefix.length > bestLength) {
+      if (covers(prefix, path) && prefix.length > bestLength) {
         best = item
         bestLength = prefix.length
       }

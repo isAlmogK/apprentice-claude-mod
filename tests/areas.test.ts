@@ -57,6 +57,15 @@ test('areaForPath picks the longest matching prefix', async () => {
   expect(areaForPath([{ id: 'a', paths: ['a/'] }], 'b/x.ts')).toBeUndefined()
 })
 
+test('areaForPath leaves files in new top-level folders outside every area', async () => {
+  const list = [{ id: 'src', paths: ['src/'] }, { id: 'root', paths: [''] }]
+  expect(areaForPath(list, 'package.json')?.id).toBe('root')
+  expect(areaForPath(list, 'tools/new.ts')).toBeUndefined()
+  expect(areaForPath(list, '.claude/settings.json')).toBeUndefined()
+  // A split folder's direct-files prefix still takes a new subfolder of it
+  expect(areaForPath(list, 'src/new/x.ts')?.id).toBe('src')
+})
+
 const area = (id: string, over: Partial<Area> = {}): Area => ({
   id, name: id, paths: [`${id}/`], lines: 100, score: 0.5, editsSinceLooked: 0, level: 'mid', streak: 0, ...over,
 })

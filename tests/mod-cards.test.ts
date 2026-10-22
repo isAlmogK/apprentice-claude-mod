@@ -195,3 +195,21 @@ test('a session started in a worktree maps that worktree and keeps the repo id',
   await edit($, `${FEATURE}/src/auth/login.ts`, 't1')
   expect((await areaIn(w, 'src-auth')).editsSinceLooked).toBe(1)
 })
+
+test('an edit in a new top-level folder dims nothing and makes no card', async ($, on) => {
+  const tree = [
+    '100644 blob 1111111111111111111111111111111111111111    4000\tsrc/billing/invoice.ts',
+    '100644 blob 2222222222222222222222222222222222222222    4000\tsrc/auth/login.ts',
+    '100644 blob 3333333333333333333333333333333333333333    4000\tdocs/guide.md',
+    '100644 blob 4444444444444444444444444444444444444444    4000\tpackage.json',
+  ].join('\n')
+  const w = stubWorld(on, { git: { 'ls-tree -r -l HEAD': { stdout: tree } } })
+  await mapFixture($, w)
+  const before = await areaIn(w, 'root')
+  expect(before).toMatchObject({ name: 'Root files', editsSinceLooked: 0 })
+  await edit($, `${ROOT}/tools/new.ts`, 't1')
+  await edit($, `${ROOT}/.claude/settings.json`, 't2')
+  for (let i = 0; i < 20; i++) await w.clock.settle()
+  expect(await areaIn(w, 'root')).toEqual(before)
+  expect(cardCalls(w)).toBe(0)
+})
