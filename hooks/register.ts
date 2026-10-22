@@ -1,9 +1,13 @@
 import { areaForPath, carryProgress, draftToArea, groupAreas, mergeAreas, renameArea, type AreaDraft } from '../src/core/areas.ts'
-import { BLAME_SAMPLE, parseBlame, parseLog, parseLsTree, repoIdFrom, repoNameOf, sampleFiles } from '../src/core/git.ts'
+import { BLAME_SAMPLE, parseBlame, parseLog, parseLsTree, relativeTo, repoIdFrom, repoNameOf, sampleFiles } from '../src/core/git.ts'
 import type { Area, Card } from '../src/core/types.ts'
-import { initialLevel, seedScore } from '../src/core/understanding.ts'
-import { parseAreaNames } from '../src/cards/parse.ts'
-import { buildNamingRequest } from '../src/cards/prompt.ts'
+import { applyAnswer, applyDim, changedLinesOf, dimmedByFor, initialLevel, isFlawAnswerRight, seedScore } from '../src/core/understanding.ts'
+import { isoWeek } from '../src/core/wrapped.ts'
+import { isSecretPath } from '../src/cards/exclude.ts'
+import { CARDS_PER_HOUR, HOUR_MS, cardsWithinHour } from '../src/cards/policy.ts'
+import { parseAreaNames, parseCardReply } from '../src/cards/parse.ts'
+import { MAX_HUNK_LINES, buildCardRequest, buildNamingRequest, diffOf, editTextsOf, type EditText } from '../src/cards/prompt.ts'
+import { renderCard } from '../src/views/card.ts'
 import { renderPane, type PaneModel, type PaneStatus } from '../src/views/pane.ts'
 
 export const MAP_PANE = 'apprentice'
@@ -166,6 +170,102 @@ function paneModel(e: any): PaneModel {
 }
 
 // --- cards ---
+const REVEAL_MS = 8000
+const PENDING_MAX = 5
+
+type CardContext = { areaId: string; areaName: string; level: Area['level']; edit: EditText; dimmedBy: number; editId: string }
+
+let card: Card | null = null
+let revealed: { isRight: boolean } | null = null
+let quietUntil = 0
+let cardTimes: number[] = []
+let firstEditDone = false
+
+async function makeCard($: any, ctx: CardContext): Promise<void> {
+  if (!repo) return
+  const ignored = await runGit($, repo.root, ['check-ignore', '-q', ctx.edit.file])
+  if (ignored.exitCode === 0) return
+  const request = buildCardRequest(ctx.areaName, ctx.level, ctx.edit)
+  let reply: any
+  try {
+    reply = await $.model.complete({ model: 'haiku', system: request.system, prompt: request.prompt, maxTokens: 600, timeoutMs: 20000 })
+  } catch {
+    return
+  }
+  if (!reply?.isAnswered) return
+  const parsed = parseCardReply(reply.text, {
+    areaId: ctx.areaId, level: ctx.level, file: ctx.edit.file, editId: ctx.editId,
+    dimmedBy: ctx.dimmedBy, hunk: diffOf(ctx.edit, MAX_HUNK_LINES),
+  })
+  if (!parsed) return
+  const now = await $.clock.now()
+  card = parsed
+  revealed = null
+  cardTimes = [...cardsWithinHour(cardTimes, now), now]
+  $.ui.invalidate('ui.render')
+}
+
+async function logAnswer($: any, c: Card, outcome: { skipped: boolean; isRight: boolean; flagged: boolean }): Promise<void> {
+  if (!repo) return
+  const now = await $.clock.now()
+  const key = `repo:${repo.id}:answers:${isoWeek(now)}`
+  const log = (await $.store.get(key)) ?? []
+  const entry = {
+    at: now, areaId: c.areaId, level: c.level, kind: c.kind, ...outcome,
+    haikuSeesFlaw: c.kind === 'flaw' ? c.haikuSeesFlaw : false,
+  }
+  await $.store.set(key, [...log, entry])
+}
+
+async function answerCard($: any, c: Card, isRight: boolean, flagged: boolean): Promise<void> {
+  if (!repo || card !== c || revealed) return
+  revealed = { isRight }
+  areas = areas.map(a => (a.id === c.areaId ? applyAnswer(a, c.dimmedBy, isRight) : a))
+  $.ui.invalidate('ui.render')
+  await updateArea($, repo, c.areaId, a => applyAnswer(a, c.dimmedBy, isRight))
+  await logAnswer($, c, { skipped: false, isRight, flagged })
+  $.clock.after(REVEAL_MS, () => {
+    if (card === c) {
+      card = null
+      revealed = null
+      $.ui.invalidate('ui.render')
+    }
+  })
+}
+
+async function skipCard($: any, c: Card): Promise<void> {
+  if (!repo || card !== c) return
+  card = null
+  revealed = null
+  $.ui.invalidate('ui.render')
+  const key = `repo:${repo.id}:pending:${c.areaId}`
+  const pending: Card[] = (await $.store.get(key)) ?? []
+  const updated = [...pending, c].slice(-PENDING_MAX)
+  await $.store.set(key, updated)
+  if (selectedId === c.areaId) pendingCards = updated
+  await logAnswer($, c, { skipped: true, isRight: false, flagged: false })
+}
+
+async function quietCards($: any, minutes: number): Promise<void> {
+  quietUntil = (await $.clock.now()) + minutes * 60_000
+  card = null
+  revealed = null
+  $.ui.invalidate('ui.render')
+}
+
+async function restorePending($: any, index: number): Promise<void> {
+  if (!repo || !selectedId) return
+  const key = `repo:${repo.id}:pending:${selectedId}`
+  const pending: Card[] = (await $.store.get(key)) ?? []
+  const chosen = pending[index]
+  if (!chosen) return
+  const rest = pending.filter((_, i) => i !== index)
+  await $.store.set(key, rest)
+  pendingCards = rest
+  card = chosen
+  revealed = null
+  $.ui.invalidate('ui.render')
+}
 
 export function register(on: any) {
   on('session.start', async ($: any, e: any, next: any) => {
@@ -185,7 +285,12 @@ export function register(on: any) {
   })
 
   on('command.run', { command: 'apprentice' }, async ($: any, e: any) => {
-    const [sub = ''] = String(e.args ?? '').trim().split(/\s+/)
+    const [sub = '', arg = ''] = String(e.args ?? '').trim().split(/\s+/)
+    if (sub === 'quiet') {
+      const minutes = Number(arg) > 0 ? Math.round(Number(arg)) : 60
+      await quietCards($, minutes)
+      return { text: `Cards are paused for ${minutes} minutes.` }
+    }
     if (sub !== '' && sub !== 'remap') return { text: USAGE }
     if (repo && (sub === 'remap' || status === 'idle' || status === 'failed')) startMapping($)
     await $.ui.open({ id: MAP_PANE, title: 'Apprentice', focus: true, closeOnEscape: true })
@@ -199,9 +304,60 @@ export function register(on: any) {
       onSelect: (id: string | null) => selectArea($, id),
       onRename: (id: string, name: string) => renameAndSave($, id, name),
       onMerge: (fromId: string, intoId: string) => mergeAndSave($, fromId, intoId),
-      onRestore: () => {},
+      onRestore: (index: number) => restorePending($, index),
     })
   })
 
   // --- more hooks ---
+
+  on('turn.start', async ($: any, e: any, next: any) => {
+    if (e.agentId === undefined) firstEditDone = false
+    return next(e)
+  })
+
+  on('tool.call', { tool: ['Edit', 'Write', 'MultiEdit'] }, async ($: any, e: any, next: any) => {
+    const result = await next(e)
+    if (result?.deny || result?.isError || status !== 'ready' || !repo) return result
+    const rel = relativeTo(repo.root, String(e.file_path ?? ''))
+    if (rel === null) return result
+    const area = areaForPath(areas, rel)
+    if (!area) return result
+    const dimmedBy = dimmedByFor(area, changedLinesOf(e.tool, e))
+    areas = areas.map(a => (a.id === area.id ? applyDim(a, dimmedBy) : a))
+    $.ui.invalidate('ui.render')
+    await updateArea($, repo, area.id, a => applyDim(a, dimmedBy))
+    const now = await $.clock.now()
+    const wantsCard = !firstEditDone && now >= quietUntil
+      && cardsWithinHour(cardTimes, now).length < CARDS_PER_HOUR && !isSecretPath(rel)
+    firstEditDone = true
+    if (wantsCard) {
+      const ctx: CardContext = {
+        areaId: area.id, areaName: area.name, level: area.level,
+        edit: { file: rel, ...editTextsOf(e.tool, e) }, dimmedBy, editId: `${now}`,
+      }
+      $.clock.after(0, () => makeCard($, ctx))
+    }
+    return result
+  })
+
+  on('ui.render', { component: 'AbovePrompt' }, async ($: any, e: any, next: any) => {
+    if (!card || e.surface === 'vscode') return next(e)
+    const shown = card
+    const E = $.ui.resolve(e)
+    const areaName = areas.find(a => a.id === shown.areaId)?.name ?? 'Other'
+    const theirs = await next(e)
+    return E.Box({
+      flexDirection: 'column',
+      children: [
+        renderCard(E, { card: shown, areaName, revealed }, {
+          onAnswer: (index: number) => answerCard($, shown, shown.kind === 'question' && index === shown.answer, false),
+          onFlaw: (pressed: 'flag' | 'looks-fine') =>
+            answerCard($, shown, shown.kind === 'flaw' && isFlawAnswerRight(shown, pressed), pressed === 'flag'),
+          onSkip: () => skipCard($, shown),
+          onQuiet: () => quietCards($, 60),
+        }),
+        theirs,
+      ],
+    })
+  })
 }
