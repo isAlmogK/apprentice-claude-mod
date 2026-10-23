@@ -20,7 +20,7 @@ export function mapSvg(areas: Area[], stars: Star[]): string {
       `<circle cx="${s.x}" cy="${s.y}" r="${s.r}" fill="${TEAL}" fill-opacity="${(0.12 + 0.88 * a.score).toFixed(2)}" ` +
       `stroke="${changed ? GRAY : TEAL}" stroke-width="1.5"${changed ? ' stroke-dasharray="4 3"' : ''}/>`
     const name =
-      `<text x="${s.x}" y="${s.y + s.r + 16}" text-anchor="middle" font-size="13" font-weight="600" fill="${GRAY}">${escapeXml(a.name)}</text>`
+      `<text x="${s.x}" y="${s.y + s.r + 16}" text-anchor="middle" font-size="13" font-weight="600" fill="${GRAY}">${escapeXml(s.label)}</text>`
     const detail =
       `<text x="${s.x}" y="${s.y + s.r + 31}" text-anchor="middle" font-size="11" fill="${GRAY}">` +
       `${Math.round(a.score * 100)}%${changed ? ` · ${a.editsSinceLooked} new` : ''}</text>`

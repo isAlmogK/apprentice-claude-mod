@@ -114,6 +114,8 @@ Module variables, lost on a reload: the card on screen, the quiet-until time, th
 | Terminal | `Raster` grid in a `Pane` | `AbovePrompt` band, as text | `Box` tiles in a `Pane` |
 | VS Code | Not supported in v1: the pane says "Apprentice supports the Desktop app and the terminal." | Not drawn | Not supported |
 
+How the map is laid out (`layoutStars` in `src/views/layout.ts`): areas, sorted by id, fill a grid of 1 row (up to 3 areas), 2 rows (up to 8) or 3 rows, row by row, with a short last row centered. Each star gets its own cell and stays inside it, circle and label, so nothing overlaps and nothing leaves the 640 × 300 map. Inside its cell a star is nudged by a fixed amount for its position, so the map doesn't look like a table. A star's radius is `8 + 24 × sqrt(lines share)`, capped so it fits its cell (at most 32). A name wider than its cell, estimated at 8px a character, is cut short with "…" (the area list under the map shows the full name). The terminal raster places each star at the same relative position.
+
 Outside a git repo the pane says "Apprentice needs a git repo." and nothing else happens. If a mapping step fails, the pane says which one and suggests `/apprentice remap`. The map takes no clicks; areas are opened from the list under it.
 
 ## Testing

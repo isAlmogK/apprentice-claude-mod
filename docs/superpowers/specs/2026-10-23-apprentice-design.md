@@ -370,6 +370,7 @@ Where the code differs from this spec, as of 2026-10-23. The current truth is in
 16. The band trims a spot-the-flaw hunk to `max(3, maxRows - 7)` lines plus "… N more lines", from `AbovePrompt`'s `maxRows`, so the card never scrolls (a scrolling band arms no digit hotkey). The stored hunk keeps up to 40 lines.
 17. The hourly cap counts card requests to Haiku when they're made, not cards shown, so replies that make no card count too.
 18. The repo is published as `isAlmogK/apprentice-claude-mod`, so the install is `/plugin marketplace add isAlmogK/apprentice-claude-mod`, then `/plugin install apprentice@apprentice` (the marketplace and plugin are still named `apprentice`).
+19. The map lays stars out on a grid, one cell per area with its label inside the cell, instead of a free scatter, so stars and labels never overlap; long names are cut short with "…" on the map. The first layout, a golden-angle spiral, overlapped about 3 times on a map of 7 to 10 areas.
 
 ## Sources
 

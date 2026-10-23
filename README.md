@@ -86,7 +86,7 @@ The images below are drawn from Apprentice's own view code with demo data (`node
 <p align="center"><img src="docs/images/band-flaw.png" alt="A spot-the-flaw card: a diff that removes the session expiry check, with Looks fine and Flag to Claude buttons" width="640"></p>
 <p align="center"><img src="docs/images/band-answered.png" alt="The answered card: Right, with Haiku's one-line explanation" width="820"></p>
 
-**The map.** `/apprentice` groups your repo into at most 15 areas, names them, and seeds each score from `git blame`. Each area is a star, sized by its share of the code and brighter the more you know it. A dashed outline means Claude changed it since you last looked. Under the map, each area is a button for its details: rename it, merge it into another, or bring back a skipped card.
+**The map.** `/apprentice` groups your repo into at most 15 areas, names them, and seeds each score from `git blame`. Each area is a star with its name under it, sized by its share of the code and brighter the more you know it. A dashed outline means Claude changed it since you last looked. Under the map, each area is a button for its details: rename it, merge it into another, or bring back a skipped card.
 
 <p align="center"><img src="docs/images/map-desktop.png" alt="The knowledge map in the Desktop app: eight areas as stars, Billing and Web app dashed, with the headline You know 60% of the code as it is today" width="620"></p>
 
