@@ -17,6 +17,8 @@ export type PaneModel = {
   selectedId: string | null
   pending: Card[]
   columns: number
+  // The rows the pane has (its scroll.bodyRows), when Claude Code says.
+  rows?: number
 }
 
 export type PaneHandlers = {
@@ -38,11 +40,21 @@ function cardTitle(card: Card): string {
   return text.length > 70 ? text.slice(0, 69) + '…' : text
 }
 
-function mapElement(E: Elements, m: PaneModel): unknown | null {
+const MIN_RASTER_ROWS = 4
+
+// In a short pane, such as one above the prompt in a narrow terminal, the grid shrinks so the headline, the
+// stars and the legend show without scrolling. headerRows: 1, or 2 when the headline sits under the name.
+function rasterRows(m: PaneModel, headerRows: number): number {
+  if (m.rows === undefined) return RASTER_ROWS
+  return Math.max(MIN_RASTER_ROWS, Math.min(RASTER_ROWS, m.rows - headerRows - 1))
+}
+
+function mapElement(E: Elements, m: PaneModel, headerRows: number): unknown | null {
   const stars = layoutStars(m.areas)
   if (m.surface === 'desktop' && E.Svg) return E.Svg({ source: mapSvg(m.areas, stars), alt: mapAlt(m.areas) })
   if (m.surface === 'terminal' && E.Raster) {
-    return E.Raster({ key: 'map', columns: m.columns, rows: RASTER_ROWS, cells: rasterCells(m.areas, stars, m.columns, RASTER_ROWS) })
+    const rows = rasterRows(m, headerRows)
+    return E.Raster({ key: 'map', columns: m.columns, rows, cells: rasterCells(m.areas, stars, m.columns, rows) })
   }
   return null
 }
@@ -77,13 +89,16 @@ export function renderPane(E: Elements, m: PaneModel, h: PaneHandlers): unknown 
   if (m.status === 'failed') return column([line(E, m.error), line(E, 'Run /apprentice remap to try again.', { dimColor: true })])
   if (m.areas.length === 0) return column([line(E, m.status === 'idle' ? 'Run /apprentice to map this repo.' : m.progress)])
 
+  const headline = `You know ${knownPercent(m.areas)}% of the code as it is today`
+  // When the name and the headline don't fit side by side, the headline goes under the name instead of wrapping both.
+  const stacked = m.repoName.length + 2 + headline.length > m.columns
   const children: unknown[] = [
     E.Box({
-      flexDirection: 'row', columnGap: 2,
-      children: [line(E, m.repoName, { bold: true }), line(E, `You know ${knownPercent(m.areas)}% of the code as it is today`)],
+      key: 'header', flexDirection: stacked ? 'column' : 'row', columnGap: 2,
+      children: [line(E, m.repoName, { bold: true }), line(E, headline)],
     }),
   ]
-  const map = mapElement(E, m)
+  const map = mapElement(E, m, stacked ? 2 : 1)
   if (map) children.push(map)
   children.push(line(E, m.surface === 'terminal'
     ? '● you know it · ○ Claude changed it since'

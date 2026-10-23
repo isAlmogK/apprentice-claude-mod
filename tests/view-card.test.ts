@@ -64,3 +64,21 @@ test('a flaw card trims its hunk to fit the band', async () => {
   expect(byKey(roomy, 'hunk')?.props.source).toBe(hunk)
   expect(byKey(renderCard(fakeElements, { card: { ...flaw, hunk }, areaName: 'Auth', revealed: null }, handlers), 'hunk')?.props.source).toBe(hunk)
 })
+
+test('a flaw card counts the rows that long diff lines wrap to', async () => {
+  // At 46 band columns the code is 40 wide, so a 100-character line takes 3 rows.
+  const body = Array.from({ length: 10 }, (_, i) => `+${String(i).repeat(99)}`)
+  const tree = renderCard(fakeElements, { card: { ...flaw, hunk: body.join('\n') }, areaName: 'Auth', revealed: null, maxRows: 16, columns: 46 }, handlers)
+  expect(byKey(tree, 'hunk')?.props.source).toBe([...body.slice(0, 3), '… 7 more lines'].join('\n'))
+  // Without a width, lines count as one row each, as before.
+  const unknown = renderCard(fakeElements, { card: { ...flaw, hunk: body.join('\n') }, areaName: 'Auth', revealed: null, maxRows: 16 }, handlers)
+  expect(byKey(unknown, 'hunk')?.props.source).toBe([...body.slice(0, 9), '… 1 more line'].join('\n'))
+})
+
+test('a stored "1 more line" marker is read back', async () => {
+  const body = Array.from({ length: 5 }, (_, i) => `+line ${i}`)
+  const hunk = [...body, '… 1 more line'].join('\n')
+  // Five lines fit the 5 rows, so the stored marker stays as it is.
+  const tree = renderCard(fakeElements, { card: { ...flaw, hunk }, areaName: 'Auth', revealed: null, maxRows: 12 }, handlers)
+  expect(byKey(tree, 'hunk')?.props.source).toBe(hunk)
+})

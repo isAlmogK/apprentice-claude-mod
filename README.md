@@ -27,7 +27,7 @@ No account, no server. It runs inside Claude Code and uses Haiku, through Claude
 Type `1` into the empty prompt and the card shows the answer and a one-line explanation. Get it right and `Billing` brightens on the map again.
 
 > [!NOTE]
-> **Status: alpha.** Everything in v1 is built and covered by 112 tests, and `claude plugin validate` passes. It has been checked by hand in the Desktop app, the terminal and a linked worktree. Watch or ⭐ the repo to follow along, and [open an issue](https://github.com/isAlmogK/apprentice-claude-mod/issues) if something looks off.
+> **Status: alpha.** Everything in v1 is built and covered by 118 tests, and `claude plugin validate` passes. It has been checked by hand in the Desktop app, the terminal and a linked worktree. Watch or ⭐ the repo to follow along, and [open an issue](https://github.com/isAlmogK/apprentice-claude-mod/issues) if something looks off.
 
 ## Why I'm building this
 

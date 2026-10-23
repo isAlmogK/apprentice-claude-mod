@@ -371,6 +371,8 @@ Where the code differs from this spec, as of 2026-10-23. The current truth is in
 17. The hourly cap counts card requests to Haiku when they're made, not cards shown, so replies that make no card count too.
 18. The repo is published as `isAlmogK/apprentice-claude-mod`, so the install is `/plugin marketplace add isAlmogK/apprentice-claude-mod`, then `/plugin install apprentice@apprentice` (the marketplace and plugin are still named `apprentice`).
 19. The map lays stars out on a grid, one cell per area with its label inside the cell, instead of a free scatter, so stars and labels never overlap; long names are cut short with "…" on the map. The first layout, a golden-angle spiral, overlapped about 3 times on a map of 7 to 10 areas.
+20. The spot-the-flaw diff shows lines the edit left unchanged as context (` `) instead of removing and adding them again, and the band's trim counts the rows a diff line wraps to at the band's width (`bodyColumns`), not lines. Found in the hand check on 2026-10-23.
+21. The terminal map's grid shrinks to the pane's rows (at least 4) in a short pane, and the headline goes under the repo name when the two don't fit side by side. Found in the hand check on 2026-10-23.
 
 ## Sources
 

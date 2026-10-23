@@ -26,6 +26,14 @@ test('the terminal pane draws a Raster', async ($, on) => {
   expect(await ui.find({ type: 'Raster' })).toBeDefined()
 })
 
+test('a terminal pane above the prompt fits the map to its rows', async ($, on) => {
+  const w = stubWorld(on)
+  await mapFixture($, w)
+  const site = paneSite('terminal')
+  const ui = await $.ui.mount({ ...site, props: { ...site.props, bodyColumns: 45, placement: 'inline', scroll: { offset: 0, bodyRows: 8 } } })
+  expect((await ui.find({ type: 'Raster' }))?.props).toMatchObject({ columns: 45, rows: 5 })
+})
+
 test('renaming an area is saved and survives a remap', async ($, on) => {
   const w = stubWorld(on)
   await mapFixture($, w)

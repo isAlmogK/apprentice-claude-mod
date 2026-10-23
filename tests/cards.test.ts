@@ -22,6 +22,21 @@ test('editTextsOf reads each tool', async () => {
   expect(editTextsOf('MultiEdit', { edits: [{ old_string: 'a', new_string: 'b' }, { old_string: 'c', new_string: 'd' }] })).toEqual({ oldText: 'a\nc', newText: 'b\nd' })
 })
 
+test('diffOf keeps lines the edit left unchanged as context', async () => {
+  // Claude carries surrounding lines in old_string and new_string so the edit is unique; they didn't change.
+  expect(diffOf({ file: 'f', oldText: 'const a = 1\ntry {', newText: 'const a = 1\n// note\ntry {' }, 10)).toBe(' const a = 1\n+// note\n try {')
+  expect(diffOf({ file: 'f', oldText: 'export f() {', newText: '/** doc */\nexport f() {' }, 10)).toBe('+/** doc */\n export f() {')
+  expect(diffOf({ file: 'f', oldText: 'a\nold\nz', newText: 'a\nnew\nz' }, 10)).toBe(' a\n-old\n+new\n z')
+  // The same line at both ends is counted once.
+  expect(diffOf({ file: 'f', oldText: 'a\na', newText: 'a' }, 10)).toBe(' a\n-a')
+  expect(diffOf({ file: 'f', oldText: '', newText: 'x\ny' }, 10)).toBe('+x\n+y')
+})
+
+test('the cut marker says "line" for one line', async () => {
+  const lines = Array.from({ length: 121 }, (_, i) => `l${i}`).join('\n')
+  expect(diffOf({ file: 'f', oldText: '', newText: lines }, 120).split('\n').at(-1)).toBe('… 1 more line')
+})
+
 test('diffOf marks lines and cuts long diffs', async () => {
   expect(diffOf({ file: 'f', oldText: 'a', newText: 'b\nc' }, 10)).toBe('-a\n+b\n+c')
   const long = diffOf({ file: 'f', oldText: '', newText: Array.from({ length: 130 }, (_, i) => `l${i}`).join('\n') }, 120)
