@@ -127,6 +127,8 @@ claude plugin validate .
 
 `claude plugin test` runs every `tests/*.test.ts` as one suite (it takes a plugin folder, not a file). `claude plugin validate .` checks the hooks module; it warns that `CLAUDE.md` at the plugin root isn't loaded as project context, which is expected, because that file is for people working on this repo.
 
+README images: `node scripts/screenshots.ts` draws each view (`renderCard`, `renderPane`, `renderWrapped`) with demo data into HTML and captures it with headless Chrome into `docs/images/`. It needs Node 22.18 or later (it runs the `.ts` files directly) and Google Chrome (`CHROME` overrides the path). The images are previews of what the views draw, not captures of a live session.
+
 Manual check, in the Desktop app on a real repo (add `{ "env": { "CLAUDE_CODE_PLUGIN_DIRS": "<path to this repo>" } }` to `~/.claude/settings.json`, start a new session, and remove the entry afterwards):
 
 - [ ] `/apprentice` opens the pane, shows progress, then the map, the headline and the area list.
