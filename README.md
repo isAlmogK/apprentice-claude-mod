@@ -22,22 +22,12 @@ Apprentice is a mod for Claude Code. It draws a **knowledge map** of your repo t
 
 No account, no server. It runs inside Claude Code and uses Haiku, through Claude Code, to write the cards. It never blocks Claude: the card sits above your prompt while Claude keeps working.
 
-```text
-╭──────────────────────────────────────────────────────────────────────────╮
-│ Apprentice · Billing · mid card                                          │
-│ chargeInvoice() now returns early when the invoice is already paid.      │
-│ What does that prevent?                                                  │
-│ 1 · A double charge on retry   2 · A slow query   3 · A missing receipt  │
-│ Skip  Quiet 1h                                                           │
-╰──────────────────────────────────────────────────────────────────────────╯
-```
+<p align="center"><img src="docs/images/band-question.png" alt="An Apprentice card above the prompt: a question about Claude's edit to chargeInvoice() with three numbered answers" width="820"></p>
 
 Type `1` into the empty prompt and the card shows the answer and a one-line explanation. Get it right and `Billing` brightens on the map again.
 
 > [!NOTE]
-> **Status: alpha.** Everything in v1 is built and covered by 110 tests, and `claude plugin validate` passes. The hand check in a live Claude Code session is still running, and screenshots come with it. Watch or ⭐ the repo to follow along, and [open an issue](https://github.com/isAlmogK/apprentice-claude-mod/issues) if something looks off.
-
-<!-- Screenshots go here, saved under docs/images/: the band with a card, the knowledge map, Codebase Wrapped. -->
+> **Status: alpha.** Everything in v1 is built and covered by 110 tests, and `claude plugin validate` passes. The hand check in a live Claude Code session is still running. Watch or ⭐ the repo to follow along, and [open an issue](https://github.com/isAlmogK/apprentice-claude-mod/issues) if something looks off.
 
 ## Why I'm building this
 
@@ -89,19 +79,24 @@ claude --plugin-dir apprentice-claude-mod
 
 ## What you see
 
+The images below are drawn from Apprentice's own view code with demo data (`node scripts/screenshots.ts`), so the text and layout match what the mod draws. Claude Code's own styling differs a little between the Desktop app and the terminal.
+
 **The band.** After Claude's first edit of a turn, a card appears above your prompt while Claude keeps working. Juniors and mids get a question with three numbered answers. Seniors get a spot-the-flaw card: the diff Claude just wrote, with **Looks fine** and **Flag to Claude**. Flag to Claude sends Claude a short note about the concern once it's idle. Answer with a click, or type `1`, `2` or `3` into the empty prompt. A wrong answer still shows the explanation. **Skip** keeps the card in the area's list for later; **Quiet 1h** pauses cards.
 
-**The map.** `/apprentice` groups your repo into at most 15 areas, names them, and seeds each score from `git blame`. Each area is a star, sized by its share of the code and brighter the more you know it. A dashed outline means Claude changed it since you last looked. The Desktop app draws it as an image; the terminal draws a character grid. Under the map, each area is a button for its details: rename it, merge it into another, or bring back a skipped card.
+<p align="center"><img src="docs/images/band-flaw.png" alt="A spot-the-flaw card: a diff that removes the session expiry check, with Looks fine and Flag to Claude buttons" width="640"></p>
+<p align="center"><img src="docs/images/band-answered.png" alt="The answered card: Right, with Haiku's one-line explanation" width="820"></p>
 
-```text
-my-app  You know 68% of the code as it is today
-● you know it · ○ Claude changed it since
-API routes · 84%
-Billing · 41% · 3 Claude edits since you looked
-Web app · 72%
-```
+**The map.** `/apprentice` groups your repo into at most 15 areas, names them, and seeds each score from `git blame`. Each area is a star with its name under it, sized by its share of the code and brighter the more you know it. A dashed outline means Claude changed it since you last looked. Under the map, each area is a button for its details: rename it, merge it into another, or bring back a skipped card.
+
+<p align="center"><img src="docs/images/map-desktop.png" alt="The knowledge map in the Desktop app: eight areas as stars, Billing and Web app dashed, with the headline You know 60% of the code as it is today" width="620"></p>
+
+The terminal draws the same map as a character grid:
+
+<p align="center"><img src="docs/images/map-terminal.png" alt="The knowledge map in the terminal: filled and hollow dots on a grid, with the area list under it" width="560"></p>
 
 **Codebase Wrapped.** Once a week, when you've answered at least 5 cards, a toast says your week is ready. `/apprentice wrapped` shows areas mastered, flaws you caught, cards answered, dark zones left and your biggest jump. **Copy** puts a text version on your clipboard, ready to post. It never contains code.
+
+<p align="center"><img src="docs/images/wrapped.png" alt="Codebase Wrapped: four tiles for areas mastered, flaws caught, cards answered and dark zones left, the biggest jump and a Copy button" width="640"></p>
 
 ## Commands
 
@@ -168,7 +163,7 @@ No. Scores live in Claude Code's local mod store on your machine. Codebase Wrapp
 | Phase | Scope | State |
 |---|---|---|
 | v1 | Knowledge map (Desktop and terminal), question and spot-the-flaw cards, Flag to Claude, Codebase Wrapped, rename and merge areas | ✅ Built |
-| Launch | Hand check in a live session, screenshots, first release | 🚧 In progress |
+| Launch | Hand check in a live session, first release | 🚧 In progress |
 | Later | Lines between areas that change together, VS Code support, cards for edits made by people, a team view for onboarding | Planned |
 
 ## Docs
@@ -186,7 +181,7 @@ claude plugin test        # the whole test suite
 claude plugin validate .  # the manifest and hooks module
 ```
 
-Run both before every commit. To try a change, start Claude Code with `claude --plugin-dir <path to your clone>`.
+Run both before every commit. To try a change, start Claude Code with `claude --plugin-dir <path to your clone>`. After changing a view, run `node scripts/screenshots.ts` (Node 22.18 or later and Google Chrome) to redraw the images in `docs/images/`.
 
 ## Sponsor
 
