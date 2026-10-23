@@ -3267,7 +3267,7 @@ Expected: every test passes; `✔ Validation passed`.
 This step needs a person at the keyboard. In the Desktop app, open a local session in `dogbase-web-app-v2` with the plugin loaded. The Desktop app reads `CLAUDE_CODE_PLUGIN_DIRS`, so add this to `~/.claude/settings.json` under `env` for the test, then start a new session:
 
 ```json
-{ "env": { "CLAUDE_CODE_PLUGIN_DIRS": "/Users/Almog/Engineering/Open Source/apprentice" } }
+{ "env": { "CLAUDE_CODE_PLUGIN_DIRS": "<path to this repo>" } }
 ```
 
 Check each item and note anything that differs:
@@ -3280,7 +3280,7 @@ Check each item and note anything that differs:
 - [ ] Flag to Claude starts a turn once Claude is idle.
 - [ ] Skip, the area's details, and restoring a skipped card all work.
 - [ ] `/apprentice wrapped` shows the tiles, and Copy puts the text on the clipboard.
-- [ ] In a terminal (`claude --plugin-dir "/Users/Almog/Engineering/Open Source/apprentice"`), the pane shows the raster map and the band shows cards.
+- [ ] In a terminal (`claude --plugin-dir "<path to this repo>"`), the pane shows the raster map and the band shows cards.
 
 Remove the `CLAUDE_CODE_PLUGIN_DIRS` entry afterwards.
 

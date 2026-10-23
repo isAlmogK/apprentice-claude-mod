@@ -1,0 +1,14 @@
+{
+  "name": "apprentice",
+  "description": "Learn the code Claude is changing in your repo: a knowledge map plus one short card per editing turn",
+  "owner": {
+    "name": "Almog Koren"
+  },
+  "plugins": [
+    {
+      "name": "apprentice",
+      "source": "./",
+      "description": "A knowledge map of your repo that dims where Claude changed code you haven't seen, plus one short card per editing turn"
+    }
+  ]
+}
