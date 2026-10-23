@@ -1,6 +1,6 @@
 # Apprentice: Design
 
-**Status:** Implemented (2026-10-23), manual check pending
+**Status:** Implemented (2026-10-23)
 
 **Repos:** apprentice (this spec: the whole feature). No other repo changes.
 

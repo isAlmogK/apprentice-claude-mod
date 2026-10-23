@@ -27,7 +27,7 @@ No account, no server. It runs inside Claude Code and uses Haiku, through Claude
 Type `1` into the empty prompt and the card shows the answer and a one-line explanation. Get it right and `Billing` brightens on the map again.
 
 > [!NOTE]
-> **Status: alpha.** Everything in v1 is built and covered by 110 tests, and `claude plugin validate` passes. The hand check in a live Claude Code session is still running. Watch or ⭐ the repo to follow along, and [open an issue](https://github.com/isAlmogK/apprentice-claude-mod/issues) if something looks off.
+> **Status: alpha.** Everything in v1 is built and covered by 112 tests, and `claude plugin validate` passes. It has been checked by hand in the Desktop app, the terminal and a linked worktree. Watch or ⭐ the repo to follow along, and [open an issue](https://github.com/isAlmogK/apprentice-claude-mod/issues) if something looks off.
 
 ## Why I'm building this
 
@@ -132,6 +132,11 @@ Scores, answers and skipped cards are stored locally in Claude Code's mod store.
 - The Claude Code Desktop app or the terminal. The VS Code extension isn't supported in v1, because it doesn't draw the band above the prompt.
 - A git repo.
 
+**Good to know:**
+
+- In the Desktop app, `/apprentice` appears once the session has started, so send a first message if it isn't in the `/` menu yet. While Claude is working, the Desktop app queues it; **Send now** runs it straight away.
+- [replay-theater](https://github.com/anthropics/claude-code-playground) draws its Replay row in the band without leaving room for other mods, so with it installed, Apprentice's card disappears when a turn with edits ends. Turn replay-theater off with `claude plugin disable replay-theater@claude-code-playground-mods` to keep cards on screen until you answer them.
+
 ## FAQ
 
 <details>
@@ -163,7 +168,7 @@ No. Scores live in Claude Code's local mod store on your machine. Codebase Wrapp
 | Phase | Scope | State |
 |---|---|---|
 | v1 | Knowledge map (Desktop and terminal), question and spot-the-flaw cards, Flag to Claude, Codebase Wrapped, rename and merge areas | ✅ Built |
-| Launch | Hand check in a live session, first release | 🚧 In progress |
+| Launch | Hand check in a live session ✅, listing on claude-mods.com, first release | 🚧 In progress |
 | Later | Lines between areas that change together, VS Code support, cards for edits made by people, a team view for onboarding | Planned |
 
 ## Docs
