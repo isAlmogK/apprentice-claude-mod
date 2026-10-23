@@ -1,6 +1,6 @@
 {
   "name": "apprentice",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Learn the code Claude is changing in your repo: a knowledge map plus one short card per editing turn",
   "author": { "name": "Almog Koren", "url": "https://almog.io" },
   "license": "Apache-2.0"
