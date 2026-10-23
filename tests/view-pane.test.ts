@@ -73,3 +73,15 @@ test('Wrapped shows four tiles, the jump and Copy', async () => {
   byKey(tree, 'copy')?.props.onPress()
   expect(copied).toBe(1)
 })
+
+test('a short pane fits the terminal map to its rows and stacks a long headline', async () => {
+  // dogbase plus the 39-character headline needs 48 columns, so at 45 the headline goes under the name.
+  const tree = renderPane(fakeElements, model({ surface: 'terminal', columns: 45, rows: 8 }), handlers)
+  expect(byKey(tree, 'header')?.props.flexDirection).toBe('column')
+  // 8 rows, less 2 for the stacked header and 1 for the legend.
+  expect(byKey(tree, 'map')?.props).toMatchObject({ columns: 45, rows: 5 })
+  expect(byKey(renderPane(fakeElements, model({ surface: 'terminal', columns: 45, rows: 3 }), handlers), 'map')?.props.rows).toBe(4)
+  const wide = renderPane(fakeElements, model({ surface: 'terminal', columns: 60, rows: 30 }), handlers)
+  expect(byKey(wide, 'header')?.props.flexDirection).toBe('row')
+  expect(byKey(wide, 'map')?.props.rows).toBe(12)
+})

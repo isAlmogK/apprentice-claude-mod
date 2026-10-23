@@ -1,23 +1,36 @@
+import { MORE_LINES, moreLines } from '../cards/prompt.ts'
 import type { Card } from '../core/types.ts'
 import { line, type Elements } from './elements.ts'
 
-// maxRows: the band's rows (AbovePrompt's e.props.maxRows). A taller card scrolls and loses its hotkeys,
-// so a spot-the-flaw hunk is trimmed to fit.
-export type CardView = { card: Card; areaName: string; revealed: { isRight: boolean } | null; maxRows?: number }
+// maxRows and columns: the band's rows and width (AbovePrompt's e.props.maxRows and bodyColumns). A taller card
+// scrolls and loses its hotkeys, so a spot-the-flaw hunk is trimmed to fit.
+export type CardView = { card: Card; areaName: string; revealed: { isRight: boolean } | null; maxRows?: number; columns?: number }
 
 // Rows a flaw card takes besides its hunk: border (2), header, buttons, footer, the "more lines" marker, one spare.
 const FLAW_CARD_ROWS = 7
-const MORE_LINES = /^… (\d+) more lines$/
+// Columns around the code: the card's border and padding (4), and the code block's own inset (2).
+const CODE_INSET = 6
 
-export function fitHunk(hunk: string, maxRows: number | undefined): string {
+// Rows one diff line takes once it wraps; with no width known, each line is one row.
+function rowsOf(text: string, width: number | undefined): number {
+  return width === undefined ? 1 : Math.max(1, Math.ceil(text.length / width))
+}
+
+export function fitHunk(hunk: string, maxRows: number | undefined, columns?: number): string {
   if (maxRows === undefined) return hunk
+  const width = columns === undefined ? undefined : Math.max(10, columns - CODE_INSET)
   const lines = hunk.split('\n')
   const marker = MORE_LINES.exec(lines.at(-1) ?? '')
   const body = marker ? lines.slice(0, -1) : lines
   const total = body.length + (marker ? Number(marker[1]) : 0)
   const room = Math.max(3, maxRows - FLAW_CARD_ROWS)
-  if (body.length <= room) return hunk
-  return [...body.slice(0, room), `… ${total - room} more lines`].join('\n')
+  let used = 0
+  let kept = 0
+  while (kept < body.length && used + rowsOf(body[kept], width) <= room) used += rowsOf(body[kept++], width)
+  if (kept === body.length) return hunk
+  // Always show at least one line, even when it wraps past the room.
+  kept = Math.max(1, kept)
+  return [...body.slice(0, kept), moreLines(total - kept)].join('\n')
 }
 export type CardHandlers = {
   onAnswer: (index: number) => void
@@ -48,7 +61,7 @@ function footer(E: Elements, h: CardHandlers): unknown {
 }
 
 export function renderCard(E: Elements, view: CardView, h: CardHandlers): unknown {
-  const { card, areaName, revealed, maxRows } = view
+  const { card, areaName, revealed, maxRows, columns } = view
   const children: unknown[] = [line(E, header(card, areaName), { dimColor: true })]
   if (revealed) {
     children.push(line(E, resultLine(card, revealed.isRight), { bold: true, color: revealed.isRight ? 'green' : 'yellow' }))
@@ -64,7 +77,7 @@ export function renderCard(E: Elements, view: CardView, h: CardHandlers): unknow
     }))
     children.push(footer(E, h))
   } else {
-    children.push(E.Code({ key: 'hunk', source: fitHunk(card.hunk, maxRows), path: card.file, format: 'diff' }))
+    children.push(E.Code({ key: 'hunk', source: fitHunk(card.hunk, maxRows, columns), path: card.file, format: 'diff' }))
     children.push(E.Box({
       flexDirection: 'row', columnGap: 2,
       children: [

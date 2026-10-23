@@ -42,13 +42,26 @@ export function editTextsOf(tool: string, input: Record<string, unknown>): { old
   return { oldText: text(input.old_string), newText: text(input.new_string) }
 }
 
+export const moreLines = (n: number) => `… ${n} more ${n === 1 ? 'line' : 'lines'}`
+export const MORE_LINES = /^… (\d+) more lines?$/
+
+// Claude carries unchanged lines around an edit so old_string is unique. Lines the old and new text share at
+// the start and end are context (' '), and only the lines between them are removed ('-') and added ('+').
 export function diffOf(edit: EditText, maxLines: number): string {
+  const before = edit.oldText ? edit.oldText.split('\n') : []
+  const after = edit.newText ? edit.newText.split('\n') : []
+  let head = 0
+  while (head < before.length && head < after.length && before[head] === after[head]) head++
+  let tail = 0
+  while (tail < before.length - head && tail < after.length - head && before[before.length - 1 - tail] === after[after.length - 1 - tail]) tail++
   const lines = [
-    ...(edit.oldText ? edit.oldText.split('\n').map(l => '-' + l) : []),
-    ...(edit.newText ? edit.newText.split('\n').map(l => '+' + l) : []),
+    ...before.slice(0, head).map(l => ' ' + l),
+    ...before.slice(head, before.length - tail).map(l => '-' + l),
+    ...after.slice(head, after.length - tail).map(l => '+' + l),
+    ...after.slice(after.length - tail).map(l => ' ' + l),
   ]
   if (lines.length <= maxLines) return lines.join('\n')
-  return [...lines.slice(0, maxLines), `… ${lines.length - maxLines} more lines`].join('\n')
+  return [...lines.slice(0, maxLines), moreLines(lines.length - maxLines)].join('\n')
 }
 
 export function buildCardRequest(areaName: string, level: Level, edit: EditText): { system: string; prompt: string } {
