@@ -369,6 +369,7 @@ Where the code differs from this spec, as of 2026-10-23. The current truth is in
 15. Finding an area by path: the Root files prefix `''` matches only files at the repo root, so a file in a new top-level folder is ignored, as section 6 says. A split folder's direct-files prefix, such as `src/`, still matches files in new subfolders of `src/`, so those dim that area.
 16. The band trims a spot-the-flaw hunk to `max(3, maxRows - 7)` lines plus "… N more lines", from `AbovePrompt`'s `maxRows`, so the card never scrolls (a scrolling band arms no digit hotkey). The stored hunk keeps up to 40 lines.
 17. The hourly cap counts card requests to Haiku when they're made, not cards shown, so replies that make no card count too.
+18. The repo is published as `isAlmogK/apprentice-claude-mod`, so the install is `/plugin marketplace add isAlmogK/apprentice-claude-mod`, then `/plugin install apprentice@apprentice` (the marketplace and plugin are still named `apprentice`).
 
 ## Sources
 
