@@ -133,15 +133,26 @@ README images: `node scripts/screenshots.ts` draws each view (`renderCard`, `ren
 
 Manual check, in the Desktop app on a real repo (add `{ "env": { "CLAUDE_CODE_PLUGIN_DIRS": "<path to this repo>" } }` to `~/.claude/settings.json`, start a new session, and remove the entry afterwards):
 
-- [ ] `/apprentice` opens the pane, shows progress, then the map, the headline and the area list.
-- [ ] The area names make sense to the repo's author.
-- [ ] Asking Claude for a small edit dims the right area and shows a card in the band within about 20 seconds.
-- [ ] Typing `1` into the empty prompt answers the card.
-- [ ] A spot-the-flaw card appears for an area you wrote most of.
-- [ ] Flag to Claude starts a turn once Claude is idle.
-- [ ] Skip, the area's details, and restoring a skipped card all work.
-- [ ] `/apprentice wrapped` shows the tiles, and Copy puts the text on the clipboard.
-- [ ] In a terminal (`claude --plugin-dir <path to this repo>`), the pane shows the raster map and the band shows cards.
-- [ ] In a session started in a linked worktree (`git worktree add ../<repo>-wt`), `/apprentice` shows the same map, and an edit there dims the right area and shows a card.
+- [x] `/apprentice` opens the pane, shows progress, then the map, the headline and the area list.
+- [x] The area names make sense to the repo's author.
+- [x] Asking Claude for a small edit dims the right area and shows a card in the band within about 20 seconds.
+- [x] Typing `1` into the empty prompt answers the card.
+- [x] A spot-the-flaw card appears for an area you wrote most of.
+- [x] Flag to Claude starts a turn once Claude is idle.
+- [x] Skip, the area's details, and restoring a skipped card all work.
+- [x] `/apprentice wrapped` shows the tiles, and Copy puts the text on the clipboard.
+- [x] In a terminal (`claude --plugin-dir <path to this repo>`), the pane shows the raster map and the band shows cards.
+- [x] In a session started in a linked worktree (`git worktree add ../<repo>-wt`), `/apprentice` shows the same map, and an edit there dims the right area and shows a card.
 
-Status: not run yet.
+Status: run on 2026-10-23 on `trustbut` (8 areas, all written by the author), installed from GitHub with `claude plugin marketplace add isAlmogK/apprentice-claude-mod`, on Claude Code v2.1.296. Every item passed. The cards in that run were all spot-the-flaw cards, because every area started at the 90% seed cap, which is senior level; a question card wasn't seen live.
+
+What the run found:
+
+- **Another mod can hide the card.** Mods draw the band in a chain, and a mod earlier in the chain that returns its own tree without `await next(e)` hides Apprentice's card. replay-theater (Anthropic's example mod) does this once a turn has edits, so the card disappears when the turn ends. Apprentice keeps the card; it shows again when replay-theater stops drawing, or with replay-theater turned off. Apprentice can't move itself earlier in the chain.
+- **Desktop: `/apprentice` appears after the session starts.** A new Desktop session starts its Claude Code process with the first message, and mods register their commands then. Send any message first, or send `/apprentice` in full.
+- **Desktop: `/apprentice` waits for the turn.** The Desktop app queues it while Claude is working, despite `immediate: true`. **Send now** runs it.
+- **The card's diff repeats unchanged lines.** `diffOf` marks every old line `-` and every new line `+`, so lines Claude's edit carried for context show as removed and added again. Haiku noticed it in one explanation.
+- **A long diff line can clip the card.** `fitHunk` counts lines, not wrapped rows, so a diff whose lines wrap can be taller than the band; the card's bottom border was cut off once. The hotkeys still worked.
+- **"… 1 more lines".** The trim marker doesn't use the singular.
+- **A narrow terminal cuts the map pane off.** At 47 columns the pane sits above the prompt and shows only the first row of stars; the repo name wraps.
+- **Small edits don't move the score you see.** A 2-line edit in a large area dims it by well under a point, so the star turns dashed but the percent stays the same. This is the dimming rule working as designed.
